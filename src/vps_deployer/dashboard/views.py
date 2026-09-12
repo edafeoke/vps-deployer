@@ -5,6 +5,7 @@ from typing import Any
 from sqlalchemy import text
 
 from vps_deployer.core.config import Settings, get_settings
+from vps_deployer.core.dashboard_access import dashboard_status
 from vps_deployer.core.deployments import (
     deployment_payload,
     list_deployment_logs,
@@ -12,7 +13,12 @@ from vps_deployer.core.deployments import (
 )
 from vps_deployer.core.doctor import doctor_payload
 from vps_deployer.core.domains import domain_payload, list_domains
-from vps_deployer.core.github import github_status
+from vps_deployer.core.github import (
+    GitHubAuthError,
+    GitHubNotConfiguredError,
+    github_status,
+    list_accessible_repositories,
+)
 from vps_deployer.core.projects import get_project, list_projects, project_payload
 from vps_deployer.core.services import project_service_status
 from vps_deployer.core.ssl import ssl_status
@@ -29,6 +35,10 @@ NOTICES = {
     "restarted": "Application restart requested.",
     "domain_added": "Domain attached on this VPS.",
     "ssl_enabled": "HTTPS enable requested.",
+    "access_enabled": "Public dashboard access was updated on this VPS.",
+    "password_updated": "Dashboard password updated.",
+    "dashboard_ssl_enabled": "Dashboard HTTPS was requested.",
+    "github_configured": "GitHub App credentials were stored on this VPS.",
 }
 
 LOG_LIMIT = 200
@@ -152,4 +162,35 @@ def doctor_context(
     current = settings or get_settings()
     payload = shell_context(current, notice=notice, error=error)
     payload.update({"page": "doctor", "title": "Doctor", "doctor": doctor_payload(current)})
+    return payload
+
+
+def settings_context(
+    settings: Settings | None = None,
+    *,
+    notice: str | None = None,
+    error: str | None = None,
+    generated_password: str | None = None,
+) -> dict[str, Any]:
+    current = settings or get_settings()
+    payload = shell_context(current, notice=notice, error=error)
+    github = github_status(current, probe=False)
+    repositories: list[dict[str, str]] = []
+    repos_error: str | None = None
+    if github.get("configured"):
+        try:
+            repositories = list_accessible_repositories(current)
+        except (GitHubNotConfiguredError, GitHubAuthError) as exc:
+            repos_error = str(exc)
+    payload.update(
+        {
+            "page": "settings",
+            "title": "Settings",
+            "dashboard": dashboard_status(current),
+            "github": github,
+            "repositories": repositories,
+            "repos_error": repos_error,
+            "generated_password": generated_password,
+        }
+    )
     return payload

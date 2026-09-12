@@ -13,13 +13,18 @@ from vps_deployer.core.dashboard_access import (
     SESSION_COOKIE,
     DashboardAccessError,
     authenticate_dashboard,
+    detect_public_ipv4,
+    enable_dashboard_access,
+    enable_dashboard_ssl,
     safe_next_path,
     session_cookie_kwargs,
+    set_dashboard_password,
     valid_session_cookie,
 )
 from vps_deployer.core.deployments import queue_deployment
-from vps_deployer.core.domains import DomainNotFoundError, add_domain
+from vps_deployer.core.domains import DomainConflictError, DomainNotFoundError, add_domain
 from vps_deployer.core.engine import notify_worker
+from vps_deployer.core.github import configure_github
 from vps_deployer.core.nginx import NginxError
 from vps_deployer.core.projects import (
     ProjectConflictError,
@@ -38,6 +43,7 @@ from vps_deployer.dashboard.views import (
     overview_context,
     project_context,
     projects_context,
+    settings_context,
     shell_context,
 )
 
@@ -279,3 +285,90 @@ def dashboard_enable_ssl(
 @router.get("/doctor", response_class=HTMLResponse)
 def dashboard_doctor(request: Request, notice: str | None = None, error: str | None = None):
     return _page(request, "doctor.html", doctor_context(notice=notice, error=error))
+
+
+@router.get("/settings", response_class=HTMLResponse)
+def dashboard_settings(request: Request, notice: str | None = None, error: str | None = None):
+    return _page(request, "settings.html", settings_context(notice=notice, error=error))
+
+
+@router.post("/settings/access")
+def dashboard_settings_access(
+    request: Request,
+    host: Annotated[str, Form()] = "",
+    use_ip: Annotated[str | None, Form()] = None,
+    password: Annotated[str, Form()] = "",
+) -> Response:
+    hosts: list[str] = []
+    if host.strip():
+        hosts.append(host.strip())
+    if use_ip is not None:
+        try:
+            hosts.append(detect_public_ipv4())
+        except DashboardAccessError as exc:
+            return _redirect("/settings", error=_form_error(exc))
+    if not hosts:
+        return _redirect(
+            "/settings",
+            error="Provide a hostname and/or publish on the VPS public IP.",
+        )
+    try:
+        payload = enable_dashboard_access(
+            hosts=hosts,
+            password=password.strip() or None,
+            settings=get_settings(),
+        )
+    except (DashboardAccessError, DomainConflictError, NginxError, ValidationError) as exc:
+        return _redirect("/settings", error=_form_error(exc))
+    generated = payload.get("password")
+    if isinstance(generated, str) and generated:
+        return _page(
+            request,
+            "settings.html",
+            settings_context(notice="access_enabled", generated_password=generated),
+        )
+    return _redirect("/settings", notice="access_enabled")
+
+
+@router.post("/settings/password")
+def dashboard_settings_password(
+    password: Annotated[str, Form()],
+) -> RedirectResponse:
+    if not password.strip():
+        return _redirect("/settings", error="Dashboard password cannot be empty.")
+    try:
+        set_dashboard_password(password.strip(), get_settings())
+    except DashboardAccessError as exc:
+        return _redirect("/settings", error=_form_error(exc))
+    return _redirect("/settings", notice="password_updated")
+
+
+@router.post("/settings/ssl")
+def dashboard_settings_ssl(
+    email: Annotated[str, Form()] = "",
+) -> RedirectResponse:
+    try:
+        enable_dashboard_ssl(email.strip() or None, get_settings())
+    except (DashboardAccessError, SslError, NginxError, ValidationError) as exc:
+        return _redirect("/settings", error=_form_error(exc))
+    return _redirect("/settings", notice="dashboard_ssl_enabled")
+
+
+@router.post("/settings/github")
+def dashboard_settings_github(
+    app_id: Annotated[str, Form()],
+    private_key: Annotated[str, Form()],
+    webhook_secret: Annotated[str, Form()],
+    installation_id: Annotated[str, Form()] = "",
+) -> RedirectResponse:
+    try:
+        configure_github(
+            app_id=app_id,
+            private_key=private_key,
+            webhook_secret=webhook_secret,
+            installation_id=installation_id.strip() or None,
+            settings=get_settings(),
+        )
+    except ValueError as exc:
+        return _redirect("/settings", error=_form_error(exc))
+    return _redirect("/settings", notice="github_configured")

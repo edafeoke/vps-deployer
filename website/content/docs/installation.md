@@ -12,7 +12,7 @@ curl -fsSL https://vps-deployer.onebitstack.com/install.sh | sudo bash
 Pin a version:
 
 ```bash
-curl -fsSL https://vps-deployer.onebitstack.com/install.sh | sudo bash -s -- --version 0.1.0
+curl -fsSL https://vps-deployer.onebitstack.com/install.sh | sudo bash -s -- --version 0.2.0
 ```
 
 Install from a local checkout:
@@ -39,7 +39,7 @@ A second run is safe. It must not delete `/var/www/apps`, nginx site files, appl
 | Path | Purpose |
 | --- | --- |
 | `/opt/vps-deployer` | Installed application |
-| `/etc/vps-deployer` | Config directory (`root:vps-deployer` `750`; `config.env` mode `640`) |
+| `/etc/vps-deployer` | Config directory (`root:vps-deployer` `770`; `config.env` mode `640`) |
 | `/var/lib/vps-deployer` | SQLite database |
 | `/var/log/vps-deployer` | Installer and API logs |
 | `/var/www/apps` | Your applications |

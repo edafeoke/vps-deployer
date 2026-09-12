@@ -37,7 +37,7 @@ curl -fsSL https://vps-deployer.onebitstack.com/install.sh | sudo bash
 Optional version pin:
 
 ```bash
-curl -fsSL https://vps-deployer.onebitstack.com/install.sh | sudo bash -s -- --version 0.1.0
+curl -fsSL https://vps-deployer.onebitstack.com/install.sh | sudo bash -s -- --version 0.2.0
 ```
 
 ## Review before installation
@@ -135,11 +135,11 @@ df -h
 free -h
 ```
 
-`Permission denied: '/etc/vps-deployer/config.env'`. The service user and the admin who ran the installer must be able to read `config.env`. The directory is `root:vps-deployer` mode `750`; the file is mode `640`. Re-download `install.sh` and re-run it, or fix the live VPS:
+`Permission denied: '/etc/vps-deployer/config.env'`. The service user and the admin who ran the installer must be able to read `config.env`. The directory is `root:vps-deployer` mode `770`; the file is mode `640`. Re-download `install.sh` and re-run it, or fix the live VPS:
 
 ```bash
 sudo chown root:vps-deployer /etc/vps-deployer
-sudo chmod 750 /etc/vps-deployer
+sudo chmod 770 /etc/vps-deployer
 sudo chown vps-deployer:vps-deployer /etc/vps-deployer/config.env
 sudo chmod 640 /etc/vps-deployer/config.env
 sudo usermod -aG vps-deployer "$USER"

@@ -539,6 +539,7 @@ def github_status_cmd() -> None:
     console.print(f"app_id: {payload.get('app_id')}")
     console.print(f"installation_id: {payload.get('installation_id')}")
     console.print(f"webhook_path: {payload.get('webhook_path')}")
+    console.print(f"webhook_url: {payload.get('webhook_url')}")
     if payload.get("error"):
         console.print(f"error: {payload.get('error')}")
         raise typer.Exit(code=1)

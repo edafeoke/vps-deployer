@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero">
+  <h1>Settings</h1>
+  <p>Configure public access and the GitHub App for this VPS. Credentials stay on this machine.</p>
+</section>
+
+{% if generated_password %}
+<p class="banner ok" role="status">
+  Generated dashboard password (shown once): <code>{{ generated_password }}</code>
+</p>
+{% endif %}
+
+<section>
+  <h2>Public access</h2>
+  <p>The API still binds to <code>{{ api_host }}:{{ api_port }}</code>. Nginx publishes this console.</p>
+  <dl class="meta">
+    <div>
+      <dt>Public URL</dt>
+      <dd>{% if dashboard.url %}<a href="{{ dashboard.url }}">{{ dashboard.url }}</a>{% else %}not published{% endif %}</dd>
+    </div>
+    <div>
+      <dt>Hosts</dt>
+      <dd>{% if dashboard.hosts %}{{ dashboard.hosts|join(", ") }}{% else %}none{% endif %}</dd>
+    </div>
+    <div>
+      <dt>HTTPS</dt>
+      <dd>{% if dashboard.ssl %}enabled{% else %}off{% endif %}</dd>
+    </div>
+    <div>
+      <dt>Password</dt>
+      <dd>{% if dashboard.password_set %}set{% else %}not set{% endif %}</dd>
+    </div>
+    <div>
+      <dt>Docs site</dt>
+      <dd><a href="{{ site_url }}/docs">{{ site_url }}</a></dd>
+    </div>
+  </dl>
+  <form class="stack" method="post" action="/settings/access">
+    <label>
+      Hostname
+      <input name="host" placeholder="panel.example.com" value="" />
+    </label>
+    <label class="check">
+      <input type="checkbox" name="use_ip" value="1" />
+      Also publish on this VPS public IPv4 (HTTP only)
+    </label>
+    <label>
+      Password (optional)
+      <input type="password" name="password" autocomplete="new-password" />
+    </label>
+    <button type="submit">Publish on this VPS</button>
+  </form>
+  <form class="stack" method="post" action="/settings/password">
+    <label>
+      Replace password
+      <input type="password" name="password" required autocomplete="new-password" />
+    </label>
+    <button type="submit">Update password</button>
+  </form>
+  <form class="stack" method="post" action="/settings/ssl">
+    <label>
+      Let's Encrypt email
+      <input name="email" type="email" placeholder="ops@example.com" />
+    </label>
+    <button type="submit">Enable HTTPS</button>
+  </form>
+</section>
+
+<section id="github">
+  <h2>GitHub App</h2>
+  {% if github.configured %}
+  <p class="pass">Configured. App ID {{ github.app_id }}{% if github.installation_id %} · installation {{ github.installation_id }}{% endif %}.</p>
+  {% else %}
+  <p class="warn">Not configured. Follow the walkthrough, then paste the credentials below.</p>
+  {% endif %}
+
+  <ol class="plain">
+    <li>Publish a hostname above if GitHub must reach this VPS. Webhooks cannot hit <code>127.0.0.1</code>.</li>
+    <li>
+      Copy the webhook URL
+      {% if github.webhook_url %}
+      <span class="copy-row">
+        <code id="webhook-url">{{ github.webhook_url }}</code>
+        <button type="button" class="ghost" data-copy="webhook-url">Copy</button>
+      </span>
+      {% else %}
+      <code>{{ github.webhook_path }}</code>
+      — enable a public host first.
+      {% endif %}
+    </li>
+    <li>
+      Create a GitHub App at
+      <a href="https://github.com/settings/apps/new">github.com/settings/apps/new</a>.
+      Set the webhook URL and a webhook secret. Subscribe to <strong>push</strong>.
+      Repository permissions: Contents Read-only (and Metadata).
+    </li>
+    <li>Generate a private key and install the app on the account or organization.</li>
+    <li>Paste the App ID, PEM, webhook secret, and optional installation ID.</li>
+  </ol>
+
+  <form class="stack" method="post" action="/settings/github">
+    <label>
+      App ID
+      <input name="app_id" required inputmode="numeric" placeholder="12345" />
+    </label>
+    <label>
+      Private key (PEM)
+      <textarea name="private_key" required rows="8" placeholder="PEM private key"></textarea>
+    </label>
+    <label>
+      Webhook secret
+      <input type="password" name="webhook_secret" required minlength="8" autocomplete="new-password" />
+    </label>
+    <label>
+      Installation ID (optional)
+      <input name="installation_id" inputmode="numeric" />
+    </label>
+    <button type="submit">Store on this VPS</button>
+  </form>
+
+  {% if github.configured %}
+  <h3>Repositories this app can access</h3>
+  {% if repos_error %}
+  <p class="muted">{{ repos_error }}</p>
+  {% elif repositories %}
+  <ul class="plain">
+    {% for row in repositories %}
+    <li>{{ row.repository }} · {{ row.default_branch }}</li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="muted">No repositories listed. Install the app on an account and add an installation ID if needed.</p>
+  {% endif %}
+  {% endif %}
+</section>
+{% endblock %}

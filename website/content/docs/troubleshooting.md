@@ -15,11 +15,11 @@ Installer log: `/var/log/vps-deployer/installer.log`.
 
 ## `Permission denied: '/etc/vps-deployer/config.env'`
 
-The config directory must be `root:vps-deployer` mode `750` and `config.env` mode `640` so the service user and the installing admin can read it. Re-download `install.sh` and run it again, or fix the live VPS:
+The config directory must be `root:vps-deployer` mode `770` and `config.env` mode `640` so the service user and the installing admin can read and write GitHub App files. Re-download `install.sh` and run it again, or fix the live VPS:
 
 ```bash
 sudo chown root:vps-deployer /etc/vps-deployer
-sudo chmod 750 /etc/vps-deployer
+sudo chmod 770 /etc/vps-deployer
 sudo chown vps-deployer:vps-deployer /etc/vps-deployer/config.env
 sudo chmod 640 /etc/vps-deployer/config.env
 sudo usermod -aG vps-deployer "$USER"

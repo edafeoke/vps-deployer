@@ -283,12 +283,29 @@ label {
 
 input,
 select,
+textarea,
 button {
   font: inherit;
   color: var(--ink);
   background: #100e0a;
   border: 1px solid var(--line);
   padding: 0.5rem 0.65rem;
+}
+
+textarea {
+  min-height: 8rem;
+  resize: vertical;
+}
+
+.copy-row {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.copy-row button {
+  min-width: auto;
 }
 
 button {

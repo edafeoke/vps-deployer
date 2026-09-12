@@ -7,6 +7,19 @@ document.addEventListener("click", (event) => {
   if (message && !window.confirm(message)) {
     event.preventDefault();
   }
+  const copyId = target.getAttribute("data-copy");
+  if (copyId) {
+    const node = document.getElementById(copyId);
+    const text = node?.textContent?.trim();
+    if (text && navigator.clipboard) {
+      navigator.clipboard.writeText(text).then(() => {
+        target.textContent = "Copied";
+        window.setTimeout(() => {
+          target.textContent = "Copy";
+        }, 1600);
+      });
+    }
+  }
 });
 
 const refreshRoot = document.querySelector("[data-refresh]");

@@ -45,7 +45,23 @@ def test_configure_writes_restricted_files(tmp_env: Path) -> None:
     status = github_status(probe=False)
     assert status["configured"] is True
     assert status["app_id"] == "12345"
+    assert status["webhook_path"] == "/api/github/webhook"
+    assert status["webhook_url"] is None
     assert "supersecret" not in json.dumps(status)
+
+
+def test_github_status_webhook_url_from_published_host(tmp_env: Path) -> None:
+    from vps_deployer.core.config import get_settings
+    from vps_deployer.core.dashboard_access import enable_dashboard_access
+
+    _configure(tmp_env)
+    enable_dashboard_access(
+        hosts=["panel.example.com"],
+        password="secretpass",
+        settings=get_settings(),
+    )
+    status = github_status(probe=False)
+    assert status["webhook_url"] == "http://panel.example.com/api/github/webhook"
 
 
 def test_create_app_jwt(tmp_env: Path) -> None:

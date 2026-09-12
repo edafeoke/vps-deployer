@@ -100,7 +100,7 @@ Each installation is independent. It manages applications on that VPS only.
     releases/       # Platform release artifacts
     scripts/        # Maintenance scripts
 
-/etc/vps-deployer/   # root:vps-deployer, mode 750
+/etc/vps-deployer/   # root:vps-deployer, mode 770
     config.env      # Environment / secrets (mode 640)
     config.json     # Non-secret settings
     projects/       # Per-project files (later)

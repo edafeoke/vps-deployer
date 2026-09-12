@@ -79,6 +79,40 @@ def test_dashboard_missing_and_invalid(client: TestClient) -> None:
     assert invalid.status_code == 422
 
 
+def test_dashboard_settings_page(client: TestClient) -> None:
+    response = client.get("/settings")
+    assert response.status_code == 200
+    assert "Settings" in response.text
+    assert "GitHub App" in response.text
+    assert "/api/github/webhook" in response.text
+    assert "enable a public host first" in response.text
+    assert "github.com/settings/apps/new" in response.text
+
+
+def test_dashboard_github_form_writes_files(client: TestClient, tmp_env) -> None:
+    pem = make_github_pem()
+    posted = client.post(
+        "/settings/github",
+        data={
+            "app_id": "12345",
+            "private_key": pem,
+            "webhook_secret": "supersecret",
+            "installation_id": "67890",
+        },
+        follow_redirects=False,
+    )
+    assert posted.status_code == 303
+    assert posted.headers["location"].startswith("/settings")
+    key = tmp_env / "config" / "github-app.pem"
+    assert key.is_file()
+    assert "PRIVATE KEY" in key.read_text(encoding="utf-8")
+    page = client.get("/settings")
+    assert page.status_code == 200
+    assert "12345" in page.text
+    assert "supersecret" not in page.text
+    assert "BEGIN" not in page.text
+
+
 def test_dashboard_hides_github_secrets(client: TestClient, tmp_env) -> None:
     secret = "supersecret-webhook"
     configure_github(

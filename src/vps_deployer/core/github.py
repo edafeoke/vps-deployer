@@ -22,6 +22,7 @@ USER_AGENT = "VPS-Deployer"
 PRIVATE_KEY_NAME = "github-app.pem"
 WEBHOOK_SECRET_NAME = "github-webhook-secret"
 META_NAME = "github.json"
+WEBHOOK_PATH = "/api/github/webhook"
 
 
 class GitHubNotConfiguredError(RuntimeError):
@@ -58,6 +59,15 @@ def _config_dir(settings: Settings | None = None) -> Path:
 def _write_secret_file(path: Path, content: str) -> None:
     path.write_text(content, encoding="utf-8")
     path.chmod(0o600)
+
+
+def github_webhook_url(settings: Settings | None = None) -> str | None:
+    from vps_deployer.core.dashboard_access import dashboard_public_url
+
+    base = dashboard_public_url(settings)
+    if not base:
+        return None
+    return f"{base.rstrip('/')}{WEBHOOK_PATH}"
 
 
 def github_paths(settings: Settings | None = None) -> tuple[Path, Path, Path]:
@@ -121,13 +131,22 @@ def configure_github(
         raise ValueError("Private key must be a PEM private key")
 
     key_path, secret_path, meta_path = github_paths(settings)
-    _write_secret_file(key_path, private_key if private_key.endswith("\n") else private_key + "\n")
-    _write_secret_file(secret_path, webhook_secret + "\n")
-    meta_path.write_text(
-        json.dumps({"app_id": app_id, "installation_id": installation}, indent=2) + "\n",
-        encoding="utf-8",
-    )
-    meta_path.chmod(0o600)
+    try:
+        _write_secret_file(
+            key_path, private_key if private_key.endswith("\n") else private_key + "\n"
+        )
+        _write_secret_file(secret_path, webhook_secret + "\n")
+        meta_path.write_text(
+            json.dumps({"app_id": app_id, "installation_id": installation}, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        meta_path.chmod(0o600)
+    except OSError as exc:
+        directory = key_path.parent
+        raise ValueError(
+            f"Cannot write GitHub App files under {directory}. "
+            "If this is a production install, run: sudo chmod 770 /etc/vps-deployer"
+        ) from exc
     _record_installation(app_id, installation, settings)
     return load_github_settings(settings)
 
@@ -145,7 +164,7 @@ def _record_installation(
         row.app_id = app_id
         row.installation_id = installation_id
         row.configured = True
-        row.webhook_path = "/api/github/webhook"
+        row.webhook_path = WEBHOOK_PATH
         session.commit()
 
 
@@ -250,13 +269,15 @@ def list_accessible_repositories(settings: Settings | None = None) -> list[dict[
 
 
 def github_status(settings: Settings | None = None, probe: bool = True) -> dict[str, Any]:
+    webhook_url = github_webhook_url(settings)
     if not is_github_configured(settings):
         return {
             "configured": False,
             "authenticated": False,
             "app_id": None,
             "installation_id": None,
-            "webhook_path": "/api/github/webhook",
+            "webhook_path": WEBHOOK_PATH,
+            "webhook_url": webhook_url,
             "app_name": None,
             "error": "GitHub App is not configured",
         }
@@ -266,7 +287,8 @@ def github_status(settings: Settings | None = None, probe: bool = True) -> dict[
         "authenticated": False,
         "app_id": configured.app_id,
         "installation_id": configured.installation_id,
-        "webhook_path": "/api/github/webhook",
+        "webhook_path": WEBHOOK_PATH,
+        "webhook_url": webhook_url,
         "app_name": None,
         "error": None,
     }

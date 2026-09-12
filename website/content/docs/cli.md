@@ -38,9 +38,11 @@ vps-deployer ssl renew
 vps-deployer rollback my-next-app
 sudo vps-deployer update
 sudo vps-deployer update --yes
-sudo vps-deployer update --version 0.1.0
+sudo vps-deployer update --version 0.2.0
 sudo vps-deployer update --source /path/to/vps-deployer
 sudo vps-deployer update --force
 vps-deployer uninstall
 vps-deployer uninstall --purge --yes
 ```
+
+`github status` prints `webhook_url` after the dashboard is published. You can also finish GitHub setup on the dashboard **Settings** page.

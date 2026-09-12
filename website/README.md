@@ -10,4 +10,4 @@ npm install
 npm run dev
 ```
 
-`predev` / `prebuild` copy `installer/install.sh` and build `public/releases/vps-deployer-0.1.0.tar.gz` from the parent repository (excluding this website).
+`predev` / `prebuild` copy `installer/install.sh` and build `public/releases/vps-deployer-<version>.tar.gz` from the parent `pyproject.toml` (excluding this website).
