@@ -88,6 +88,23 @@ vd_is_https_url() {
   [[ "$url" =~ ^https:// ]]
 }
 
+vd_tar_members_safe() {
+  local archive="${1:-}"
+  local member
+  if [[ -z "$archive" || ! -f "$archive" ]]; then
+    return 1
+  fi
+  while IFS= read -r member; do
+    [[ -z "$member" ]] && continue
+    case "$member" in
+      /*|*..*)
+        return 1
+        ;;
+    esac
+  done < <(tar -tzf "$archive")
+  return 0
+}
+
 vd_safe_project_name() {
   local name="${1:-}"
   [[ "$name" =~ ^[a-z][a-z0-9-]{1,62}$ ]] && [[ "$name" != *..* ]]

@@ -266,6 +266,7 @@ def run_doctor(settings: Settings | None = None) -> list[CheckResult]:
         check_command("Node.js", "node", missing="WARN"),
         check_command("npm", "npm", missing="WARN"),
         check_nginx(),
+        check_command("certbot", "certbot", missing="WARN"),
         check_systemd(),
         check_firewall(),
         check_service(current),

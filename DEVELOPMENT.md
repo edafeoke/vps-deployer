@@ -1,6 +1,6 @@
 # Development
 
-This repository contains the VPS Deployer installation (Python API, CLI, installer). The public website is a later phase.
+This repository contains the VPS Deployer installation (Python API, CLI, installer) and the public website in `website/`.
 
 ## Requirements
 
@@ -45,9 +45,29 @@ uv run vps-deployer project remove my-next-app --yes
 uv run vps-deployer github status
 uv run vps-deployer github configure --app-id 12345 --key-file ./github-app.pem --webhook-secret 'x'
 uv run vps-deployer github repos
+uv run vps-deployer deploy my-next-app
+uv run vps-deployer logs my-next-app
+uv run vps-deployer logs my-next-app --service
+uv run vps-deployer start my-next-app
+uv run vps-deployer stop my-next-app
+uv run vps-deployer restart my-next-app
+uv run vps-deployer domain add my-next-app example.com --www
+uv run vps-deployer domain list my-next-app
+uv run vps-deployer domain remove my-next-app example.com
+uv run vps-deployer ssl enable my-next-app --email ops@example.com
+uv run vps-deployer ssl status my-next-app
+uv run vps-deployer ssl renew
+uv run vps-deployer rollback my-next-app
+uv run vps-deployer dashboard
 ```
 
-`version`, `doctor`, and `github` configure/status work without the API. `status` and project commands call `http://127.0.0.1:5100`.
+`version`, `doctor`, `dashboard`, and `github` configure/status work without the API. `status` and project commands call `http://127.0.0.1:5100`.
+
+The local dashboard is served by the same process:
+
+```bash
+curl -s http://127.0.0.1:5100/
+```
 
 ## Tests
 
@@ -76,6 +96,20 @@ uv run alembic revision --autogenerate -m "describe change"
 
 Local development can also create tables on API startup when the local config allows it.
 
+## Public website
+
+```bash
+cd website
+npm install
+npm run dev
+```
+
+Serves `http://127.0.0.1:3000/` with docs, pricing, releases, `/install.sh`, and `/installer/lib.sh`. The site must not register a VPS or accept credentials.
+
+```bash
+npm run build
+```
+
 ## Installer
 
 The installer targets Ubuntu and Debian. On macOS, test the detection helpers:
@@ -93,7 +127,8 @@ sudo bash installer/install.sh --source /path/to/vps-deployer
 ## Project layout
 
 ```
-src/vps_deployer/     Python package (API, CLI, doctor, models)
+src/vps_deployer/     Python package (API, CLI, dashboard, doctor, models)
+website/              Public site (docs, installer, releases)
 installer/            install.sh and shared lib.sh
 packaging/            systemd unit and privileged helper
 migrations/           Alembic

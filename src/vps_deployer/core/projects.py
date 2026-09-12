@@ -7,8 +7,8 @@ from datetime import UTC, datetime
 from sqlmodel import Session, select
 
 from vps_deployer.core.config import Settings, get_settings
+from vps_deployer.core.units import app_service_name
 from vps_deployer.core.validation import (
-    APPS_ROOT,
     PORT_RANGE,
     validate_app_path,
     validate_branch,
@@ -17,7 +17,6 @@ from vps_deployer.core.validation import (
     validate_project_name,
     validate_repository,
     validate_runtime,
-    validate_service_name,
 )
 from vps_deployer.db.models import (
     Deployment,
@@ -125,9 +124,12 @@ def create_project(data: ProjectCreate, settings: Settings | None = None) -> Pro
     branch = validate_branch(data.branch)
     runtime = validate_runtime(data.runtime)
     domain = validate_domain(data.domain) if data.domain else None
-    service_name = validate_service_name(name)
-    deployment_path = str(validate_app_path(APPS_ROOT / name, name))
-    port = allocate_port(data.port, settings)
+    current = settings or get_settings()
+    current.ensure_directories()
+    assert current.apps_root is not None
+    service_name = app_service_name(name)
+    deployment_path = str(validate_app_path(current.apps_root / name, name, root=current.apps_root))
+    port = allocate_port(data.port, current)
 
     with _session(settings) as session:
         existing = session.exec(select(Project).where(Project.name == name)).first()
@@ -150,7 +152,11 @@ def create_project(data: ProjectCreate, settings: Settings | None = None) -> Pro
         session.commit()
         session.refresh(project)
         session.expunge(project)
-        return project
+    if domain:
+        from vps_deployer.core.domains import attach_initial_domain
+
+        attach_initial_domain(project, domain, current)
+    return project
 
 
 def delete_project(name: str, settings: Settings | None = None) -> None:
@@ -178,3 +184,11 @@ def delete_project(name: str, settings: Settings | None = None) -> None:
             session.delete(row)
         session.delete(project)
         session.commit()
+    try:
+        from vps_deployer.core.nginx import remove_project_nginx
+        from vps_deployer.core.runtime import get_runtime
+
+        remove_project_nginx(project, settings)
+        get_runtime(settings).remove(project)
+    except Exception:
+        pass

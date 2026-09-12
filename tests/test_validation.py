@@ -7,6 +7,7 @@ from vps_deployer.core.validation import (
     validate_app_path,
     validate_branch,
     validate_domain,
+    validate_email,
     validate_env_name,
     validate_port,
     validate_project_name,
@@ -46,6 +47,14 @@ def test_repository_and_branch() -> None:
     assert validate_branch("main") == "main"
     with pytest.raises(ValidationError):
         validate_branch("main;echo")
+
+
+def test_email() -> None:
+    assert validate_email("ops@example.com") == "ops@example.com"
+    with pytest.raises(ValidationError):
+        validate_email("not-an-email")
+    with pytest.raises(ValidationError):
+        validate_email("ops@example..com")
 
 
 def test_domain_and_port() -> None:

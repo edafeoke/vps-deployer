@@ -10,6 +10,22 @@ Usage: vps-deployer-helper <action> [args]
 Allowed actions:
   service-status <unit>
   nginx-test
+  app-start <project>
+  app-stop <project>
+  app-restart <project>
+  app-status <project>
+  app-enable <project>
+  app-disable <project>
+  app-logs <project>
+  app-unit-check <project>
+  app-unit-install <project>
+  app-unit-remove <project>
+  nginx-site-check <project>
+  nginx-site-install <project>
+  nginx-site-remove <project>
+  nginx-reload
+  ssl-issue <email> <cert-name> <hostname> [hostname...]
+  ssl-renew
 EOF
 }
 
@@ -31,6 +47,332 @@ validate_service_name() {
   fi
 }
 
+validate_platform_unit() {
+  local name="${1:-}"
+  validate_service_name "$name"
+  if [[ "$name" == "vps-deployer.service" ]]; then
+    return 0
+  fi
+  if [[ "$name" =~ ^vps-deployer-app-[a-z][a-z0-9-]{1,62}\.service$ ]]; then
+    return 0
+  fi
+  reject "service is outside this installation"
+}
+
+validate_project_name() {
+  local name="${1:-}"
+  if [[ -z "$name" ]]; then
+    reject "missing project name"
+  fi
+  if [[ "$name" == *..* ]]; then
+    reject "invalid project name"
+  fi
+  if [[ ! "$name" =~ ^[a-z][a-z0-9-]{1,62}$ ]]; then
+    reject "invalid project name"
+  fi
+}
+
+require_systemctl() {
+  if ! command -v systemctl >/dev/null 2>&1; then
+    echo "systemctl is not available" >&2
+    exit 4
+  fi
+}
+
+app_unit() {
+  printf 'vps-deployer-app-%s.service' "$1"
+}
+
+validate_unit_text() {
+  local project="$1"
+  local content="$2"
+  local line port workdir
+
+  if [[ -z "$content" ]]; then
+    reject "empty unit file"
+  fi
+  if [[ ${#content} -gt 4000 ]]; then
+    reject "unit file too large"
+  fi
+  if [[ "$content" == *..* ]]; then
+    reject "unit file contains path traversal"
+  fi
+  if printf '%s' "$content" | grep -qE '[;&|`$(){}<>]'; then
+    reject "unit file contains unsafe characters"
+  fi
+  if ! grep -qxF '[Unit]' <<<"$content"; then
+    reject "missing [Unit] section"
+  fi
+  if ! grep -qxF '[Service]' <<<"$content"; then
+    reject "missing [Service] section"
+  fi
+  if ! grep -qxF '[Install]' <<<"$content"; then
+    reject "missing [Install] section"
+  fi
+  if ! grep -qxF 'User=vps-deployer' <<<"$content"; then
+    reject "invalid unit user"
+  fi
+  if ! grep -qxF 'Group=vps-deployer' <<<"$content"; then
+    reject "invalid unit group"
+  fi
+  if grep -qE '^User=root$' <<<"$content"; then
+    reject "root unit user is not allowed"
+  fi
+  workdir="$(grep -E '^WorkingDirectory=' <<<"$content" | head -n 1 | cut -d= -f2- || true)"
+  if [[ -z "$workdir" ]]; then
+    reject "missing WorkingDirectory"
+  fi
+  if [[ "$workdir" != "/var/www/apps/${project}" && "$workdir" != /var/www/apps/${project}/* ]]; then
+    reject "invalid working directory"
+  fi
+  if ! grep -qxF 'Environment=HOST=127.0.0.1' <<<"$content"; then
+    reject "unit must bind to 127.0.0.1"
+  fi
+  port="$(grep -E '^Environment=PORT=' <<<"$content" | head -n 1 | sed 's/^Environment=PORT=//' || true)"
+  if [[ ! "$port" =~ ^33[0-9]{3}$ ]] || ((port < 33000 || port > 33999)); then
+    reject "invalid application port"
+  fi
+  if ! grep -qE '^ExecStart=' <<<"$content"; then
+    reject "missing ExecStart"
+  fi
+  if grep -qE '^ExecStart=.*(bash|sh)( |$)' <<<"$content"; then
+    reject "shell ExecStart is not allowed"
+  fi
+  if grep -qE '^ExecStart=.* -c( |$)' <<<"$content"; then
+    reject "shell ExecStart is not allowed"
+  fi
+  if ! grep -qxF 'WantedBy=multi-user.target' <<<"$content"; then
+    reject "missing WantedBy"
+  fi
+  if [[ "$(grep -cE '^EnvironmentFile=' <<<"$content" || true)" -gt 1 ]]; then
+    reject "only one EnvironmentFile is allowed"
+  fi
+  if ! grep -qxF "EnvironmentFile=-/var/www/apps/${project}/shared/env" <<<"$content"; then
+    reject "invalid EnvironmentFile"
+  fi
+  while IFS= read -r line; do
+    if [[ ${#line} -gt 500 ]]; then
+      reject "unit line too long"
+    fi
+    if [[ -z "$line" ]]; then
+      continue
+    fi
+    case "$line" in
+      '[Unit]'|'[Service]'|'[Install]') continue ;;
+      'After=network.target'|'Type=simple'|'User=vps-deployer'|'Group=vps-deployer') continue ;;
+      'Environment=HOST=127.0.0.1'|'Environment=NODE_ENV=production') continue ;;
+      'Environment=PATH=/usr/local/bin:/usr/bin:/bin') continue ;;
+      'Restart=on-failure'|'RestartSec=5'|'NoNewPrivileges=true'|'PrivateTmp=true') continue ;;
+      'WantedBy=multi-user.target') continue ;;
+    esac
+    if [[ "$line" == "Description=VPS Deployer application ${project}" ]]; then
+      continue
+    fi
+    if [[ "$line" == "WorkingDirectory=/var/www/apps/${project}" || "$line" == WorkingDirectory=/var/www/apps/${project}/* ]]; then
+      continue
+    fi
+    if [[ "$line" =~ ^Environment=PORT=33[0-9]{3}$ ]]; then
+      continue
+    fi
+    if [[ "$line" == "EnvironmentFile=-/var/www/apps/${project}/shared/env" ]]; then
+      continue
+    fi
+    if [[ "$line" == ExecStart=* ]]; then
+      continue
+    fi
+    reject "unapproved unit directive"
+  done <<<"$content"
+}
+
+read_unit_stdin() {
+  local project="$1"
+  local content
+  content="$(cat)"
+  validate_unit_text "$project" "$content"
+  printf '%s' "$content"
+}
+
+require_nginx() {
+  if ! command -v nginx >/dev/null 2>&1; then
+    echo "nginx is not installed" >&2
+    exit 4
+  fi
+}
+
+nginx_site_name() {
+  printf 'vps-deployer-%s.conf' "$1"
+}
+
+validate_nginx_hostname() {
+  local name="$1"
+  if [[ ! "$name" =~ ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$ ]]; then
+    reject "invalid server_name"
+  fi
+}
+
+validate_email() {
+  local email="${1:-}"
+  if [[ -z "$email" || "$email" == *..* ]]; then
+    reject "invalid email"
+  fi
+  if [[ ! "$email" =~ ^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$ ]]; then
+    reject "invalid email"
+  fi
+}
+
+require_certbot() {
+  if ! command -v certbot >/dev/null 2>&1; then
+    echo "certbot is not installed" >&2
+    exit 4
+  fi
+}
+
+validate_nginx_site() {
+  local project="$1"
+  local content="$2"
+  local line stripped rootpath port certpath certhost
+
+  if [[ -z "$content" ]]; then
+    reject "empty nginx site"
+  fi
+  if [[ ${#content} -gt 12000 ]]; then
+    reject "nginx site too large"
+  fi
+  if [[ "$content" == *..* ]]; then
+    reject "nginx site contains path traversal"
+  fi
+  if printf '%s' "$content" | grep -qE '`|\$\(|\|'; then
+    reject "nginx site contains unsafe characters"
+  fi
+  if ! grep -qxF "# vps-deployer site: ${project}" <<<"$content"; then
+    reject "missing vps-deployer site marker"
+  fi
+  if grep -qiE '^[[:space:]]*(include|perl|lua|alias)\b' <<<"$content"; then
+    reject "forbidden nginx directive"
+  fi
+  while IFS= read -r line; do
+    if [[ ${#line} -gt 500 ]]; then
+      reject "nginx line too long"
+    fi
+    stripped="${line#"${line%%[![:space:]]*}"}"
+    if [[ -z "$stripped" || "$stripped" == \#* || "$stripped" == "}" || "$stripped" == "server {" ]]; then
+      continue
+    fi
+    if [[ "$stripped" == listen* ]]; then
+      if [[ ! "$stripped" =~ ^listen\ (\[::\]:80|80)\;$ && ! "$stripped" =~ ^listen\ (\[::\]:443|443)\ ssl\;$ ]]; then
+        reject "invalid listen directive"
+      fi
+      continue
+    fi
+    if [[ "$stripped" == server_name* ]]; then
+      names="${stripped#server_name }"
+      names="${names%;}"
+      if [[ -z "$names" ]]; then
+        reject "missing server_name"
+      fi
+      for name in $names; do
+        validate_nginx_hostname "$name"
+      done
+      continue
+    fi
+    if [[ "$stripped" == root* ]]; then
+      rootpath="${stripped#root }"
+      rootpath="${rootpath%;}"
+      if [[ "$rootpath" != "/var/www/certbot" && "$rootpath" != "/var/www/apps/${project}" && "$rootpath" != /var/www/apps/${project}/* ]]; then
+        reject "invalid nginx root"
+      fi
+      continue
+    fi
+    if [[ "$stripped" == proxy_pass* ]]; then
+      if [[ ! "$stripped" =~ ^proxy_pass\ http://127\.0\.0\.1:33[0-9]{3}\;$ ]]; then
+        reject "invalid proxy_pass"
+      fi
+      port="${stripped##*:}"
+      port="${port%;}"
+      if ((port < 33000 || port > 33999)); then
+        reject "invalid application port"
+      fi
+      continue
+    fi
+    if [[ "$stripped" == ssl_certificate_key* ]]; then
+      certpath="${stripped#ssl_certificate_key }"
+      certpath="${certpath%;}"
+      if [[ ! "$certpath" =~ ^/etc/letsencrypt/live/[a-z0-9.-]+/privkey.pem$ ]]; then
+        reject "invalid certificate path"
+      fi
+      certhost="${certpath#/etc/letsencrypt/live/}"
+      certhost="${certhost%/privkey.pem}"
+      validate_nginx_hostname "$certhost"
+      continue
+    fi
+    if [[ "$stripped" == ssl_certificate* ]]; then
+      certpath="${stripped#ssl_certificate }"
+      certpath="${certpath%;}"
+      if [[ ! "$certpath" =~ ^/etc/letsencrypt/live/[a-z0-9.-]+/fullchain.pem$ ]]; then
+        reject "invalid certificate path"
+      fi
+      certhost="${certpath#/etc/letsencrypt/live/}"
+      certhost="${certhost%/fullchain.pem}"
+      validate_nginx_hostname "$certhost"
+      continue
+    fi
+    if [[ "$stripped" == ssl_protocols* ]]; then
+      if [[ "$stripped" != "ssl_protocols TLSv1.2 TLSv1.3;" ]]; then
+        reject "invalid ssl_protocols"
+      fi
+      continue
+    fi
+    if [[ "$stripped" == return* ]]; then
+      if [[ "$stripped" != 'return 301 https://$host$request_uri;' ]]; then
+        reject "invalid return directive"
+      fi
+      continue
+    fi
+    case "$stripped" in
+      'client_max_body_size 32m;'|'location / {'|'location /.well-known/acme-challenge/ {'|'try_files $uri $uri/ /index.html;'|'proxy_http_version 1.1;')
+        continue
+        ;;
+      'proxy_set_header Host $host;'|'proxy_set_header X-Real-IP $remote_addr;')
+        continue
+        ;;
+      'proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;'|'proxy_set_header X-Forwarded-Proto $scheme;')
+        continue
+        ;;
+      'proxy_set_header Upgrade $http_upgrade;'|'proxy_set_header Connection "upgrade";')
+        continue
+        ;;
+    esac
+    reject "unapproved nginx directive"
+  done <<<"$content"
+}
+
+read_nginx_stdin() {
+  local project="$1"
+  local content
+  content="$(cat)"
+  validate_nginx_site "$project" "$content"
+  printf '%s' "$content"
+}
+
+reload_nginx() {
+  require_nginx
+  nginx -t
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl reload nginx 2>/dev/null || nginx -s reload
+  else
+    nginx -s reload
+  fi
+}
+
+remove_nginx_site_files() {
+  local project="$1"
+  local site
+  site="$(nginx_site_name "$project")"
+  rm -f -- "/etc/nginx/sites-enabled/${site}"
+  rm -f -- "/etc/nginx/sites-available/${site}"
+  rm -f -- "/etc/nginx/conf.d/${site}"
+}
+
 action="${1:-}"
 if [[ -z "$action" ]]; then
   usage
@@ -40,20 +382,156 @@ fi
 case "$action" in
   service-status)
     unit="${2:-}"
-    validate_service_name "$unit"
-    if ! command -v systemctl >/dev/null 2>&1; then
-      echo "systemctl is not available" >&2
-      exit 4
-    fi
+    validate_platform_unit "$unit"
+    require_systemctl
     systemctl is-active -- "$unit" || true
     systemctl status --no-pager -- "$unit" || true
     ;;
   nginx-test)
-    if ! command -v nginx >/dev/null 2>&1; then
-      echo "nginx is not installed" >&2
-      exit 4
-    fi
+    require_nginx
     nginx -t
+    ;;
+  nginx-reload)
+    reload_nginx
+    ;;
+  nginx-site-check)
+    project="${2:-}"
+    validate_project_name "$project"
+    read_nginx_stdin "$project" >/dev/null
+    echo "ok"
+    ;;
+  nginx-site-install)
+    project="${2:-}"
+    validate_project_name "$project"
+    require_nginx
+    content="$(read_nginx_stdin "$project")"
+    site="$(nginx_site_name "$project")"
+    tmp="$(mktemp)"
+    printf '%s\n' "$content" >"$tmp"
+    if [[ -d /etc/nginx/sites-available ]]; then
+      install -m 0644 "$tmp" "/etc/nginx/sites-available/${site}"
+      if [[ -d /etc/nginx/sites-enabled ]]; then
+        ln -sfn "/etc/nginx/sites-available/${site}" "/etc/nginx/sites-enabled/${site}"
+      fi
+    elif [[ -d /etc/nginx/conf.d ]]; then
+      install -m 0644 "$tmp" "/etc/nginx/conf.d/${site}"
+    else
+      rm -f "$tmp"
+      reject "nginx configuration directory is missing"
+    fi
+    rm -f "$tmp"
+    if ! nginx -t >/dev/null 2>&1; then
+      remove_nginx_site_files "$project"
+      echo "nginx configuration test failed" >&2
+      exit 3
+    fi
+    reload_nginx
+    ;;
+  nginx-site-remove)
+    project="${2:-}"
+    validate_project_name "$project"
+    require_nginx
+    remove_nginx_site_files "$project"
+    reload_nginx
+    ;;
+  ssl-issue)
+    email="${2:-}"
+    cert_name="${3:-}"
+    shift 3 || reject "missing certificate hostnames"
+    validate_email "$email"
+    validate_nginx_hostname "$cert_name"
+    if [[ $# -lt 1 ]]; then
+      reject "missing certificate hostnames"
+    fi
+    if [[ $# -gt 20 ]]; then
+      reject "too many hostnames"
+    fi
+    matched=0
+    for host in "$@"; do
+      validate_nginx_hostname "$host"
+      if [[ "$host" == "$cert_name" ]]; then
+        matched=1
+      fi
+    done
+    if [[ "$matched" -ne 1 ]]; then
+      reject "certificate name must be one of the hostnames"
+    fi
+    require_certbot
+    mkdir -p /var/www/certbot
+    cert_args=(
+      certbot certonly --webroot -w /var/www/certbot
+      --non-interactive --agree-tos --keep-until-expiring
+      --cert-name "$cert_name" --email "$email"
+    )
+    for host in "$@"; do
+      cert_args+=(-d "$host")
+    done
+    "${cert_args[@]}"
+    ;;
+  ssl-renew)
+    require_certbot
+    certbot renew --non-interactive --quiet
+    if command -v nginx >/dev/null 2>&1; then
+      reload_nginx
+    fi
+    ;;
+  app-start | app-stop | app-restart | app-status | app-enable | app-disable | app-logs | app-unit-remove)
+    project="${2:-}"
+    validate_project_name "$project"
+    unit="$(app_unit "$project")"
+    require_systemctl
+    case "$action" in
+      app-start)
+        systemctl start -- "$unit"
+        ;;
+      app-stop)
+        systemctl stop -- "$unit" || true
+        ;;
+      app-restart)
+        systemctl restart -- "$unit"
+        ;;
+      app-status)
+        systemctl is-active -- "$unit" || true
+        ;;
+      app-enable)
+        systemctl enable -- "$unit"
+        ;;
+      app-disable)
+        systemctl disable -- "$unit" || true
+        ;;
+      app-logs)
+        if ! command -v journalctl >/dev/null 2>&1; then
+          echo "journalctl is not available" >&2
+          exit 4
+        fi
+        journalctl --no-pager -n 200 -u "$unit"
+        ;;
+      app-unit-remove)
+        systemctl stop -- "$unit" || true
+        systemctl disable -- "$unit" || true
+        rm -f -- "/etc/systemd/system/${unit}"
+        systemctl daemon-reload
+        ;;
+    esac
+    ;;
+  app-unit-check)
+    project="${2:-}"
+    validate_project_name "$project"
+    read_unit_stdin "$project" >/dev/null
+    echo "ok"
+    ;;
+  app-unit-install)
+    project="${2:-}"
+    validate_project_name "$project"
+    require_systemctl
+    unit="$(app_unit "$project")"
+    content="$(read_unit_stdin "$project")"
+    tmp="$(mktemp)"
+    printf '%s\n' "$content" >"$tmp"
+    install -m 0644 "$tmp" "/etc/systemd/system/${unit}"
+    rm -f "$tmp"
+    systemctl daemon-reload
+    systemctl enable -- "$unit"
     ;;
   *)
     reject "unknown action"

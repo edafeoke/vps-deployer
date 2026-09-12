@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero">
+  <h1>Projects</h1>
+  <p>Each project is an application on this VPS. Adding a project does not deploy it.</p>
+</section>
+<section>
+  <h2>Add a project</h2>
+  <form class="stack" method="post" action="/projects">
+    <label>
+      Name
+      <input name="name" required pattern="[a-z][a-z0-9-]{1,62}" placeholder="my-next-app" />
+    </label>
+    <label>
+      Repository
+      <input name="repository" required placeholder="example/my-next-app" />
+    </label>
+    <div class="split">
+      <label>
+        Branch
+        <input name="branch" value="main" />
+      </label>
+      <label>
+        Runtime
+        <select name="runtime">
+          {% for item in runtimes %}
+          <option value="{{ item }}" {% if item == "nextjs" %}selected{% endif %}>{{ item }}</option>
+          {% endfor %}
+        </select>
+      </label>
+    </div>
+    <div class="split">
+      <label>
+        Port (optional)
+        <input name="port" inputmode="numeric" placeholder="33000–33999" />
+      </label>
+      <label>
+        Domain (optional)
+        <input name="domain" placeholder="example.com" />
+      </label>
+    </div>
+    <button type="submit">Create on this VPS</button>
+  </form>
+</section>
+<section>
+  <h2>Existing projects</h2>
+  {% if projects %}
+  <ul class="cards">
+    {% for card in projects %}
+    <li>
+      <a href="/projects/{{ card.project.name }}">
+        <strong>{{ card.project.name }}</strong>
+        <span>{{ card.project.repository }} · {{ card.project.runtime }} · :{{ card.project.port }}</span>
+        {% if card.latest %}
+        <span class="pill {{ card.latest.status|lower }}">{{ card.latest.status }}</span>
+        {% else %}
+        <span class="muted">not deployed</span>
+        {% endif %}
+      </a>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="empty">No projects yet.</p>
+  {% endif %}
+</section>
+{% endblock %}

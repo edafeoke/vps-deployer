@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero">
+  <h1>Doctor</h1>
+  <p>Local checks for this installation. Missing systemd or nginx is expected on a laptop.</p>
+</section>
+<p class="summary {% if doctor.ok %}pass{% else %}fail{% endif %}">
+  {{ doctor.summary.pass }} pass · {{ doctor.summary.warn }} warn · {{ doctor.summary.fail }} fail
+</p>
+<table>
+  <thead>
+    <tr>
+      <th>Check</th>
+      <th>Status</th>
+      <th>Detail</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for check in doctor.checks %}
+    <tr>
+      <td>{{ check.name }}</td>
+      <td><span class="pill {{ check.status|lower }}">{{ check.status }}</span></td>
+      <td>{{ check.message }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

@@ -44,7 +44,17 @@ class Settings(BaseSettings):
     data_dir: Path | None = None
     log_dir: Path | None = None
     database_path: Path | None = None
+    apps_root: Path | None = None
+    git_clone_base: Path | None = None
     create_tables: bool = True
+    worker_enabled: bool = True
+    release_retention: int = 5
+    runtime: str = "auto"
+    helper_path: Path | None = None
+    helper_sudo: bool = True
+    nginx_dir: Path | None = None
+    ssl_dir: Path | None = None
+    ssl_email: str | None = None
 
     def model_post_init(self, __context: object) -> None:
         layout = self._layout()
@@ -56,6 +66,19 @@ class Settings(BaseSettings):
             self.log_dir = layout["log_dir"]
         if self.database_path is None:
             self.database_path = self.data_dir / "vps-deployer.db"
+        if self.apps_root is None:
+            if production_layout_available() and self.config_dir == PRODUCTION_CONFIG_DIR:
+                self.apps_root = Path("/var/www/apps")
+            else:
+                repo = find_repo_root()
+                self.apps_root = (repo / ".local" / "apps") if repo else Path("/var/www/apps")
+        if self.nginx_dir is None and not (
+            production_layout_available() and self.config_dir == PRODUCTION_CONFIG_DIR
+        ):
+            repo = find_repo_root()
+            self.nginx_dir = (repo / ".local" / "nginx") if repo else None
+        if self.ssl_dir is None and self.nginx_dir is not None:
+            self.ssl_dir = self.nginx_dir / "certs"
 
     def _layout(self) -> dict[str, Path]:
         if production_layout_available() and self.config_dir is None:
@@ -84,6 +107,12 @@ class Settings(BaseSettings):
         self.log_dir.mkdir(parents=True, exist_ok=True)
         if self.database_path is not None:
             self.database_path.parent.mkdir(parents=True, exist_ok=True)
+        if self.apps_root is not None:
+            self.apps_root.mkdir(parents=True, exist_ok=True)
+        if self.nginx_dir is not None:
+            self.nginx_dir.mkdir(parents=True, exist_ok=True)
+        if self.ssl_dir is not None:
+            self.ssl_dir.mkdir(parents=True, exist_ok=True)
 
     @property
     def api_base_url(self) -> str:

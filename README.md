@@ -68,9 +68,29 @@ vps-deployer project remove my-next-app
 vps-deployer github status
 vps-deployer github configure --app-id 12345 --key-file ./github-app.pem --webhook-secret '<secret>'
 vps-deployer github repos
+vps-deployer deploy my-next-app
+vps-deployer logs my-next-app
+vps-deployer logs my-next-app --service
+vps-deployer start my-next-app
+vps-deployer stop my-next-app
+vps-deployer restart my-next-app
+vps-deployer domain add my-next-app example.com --www
+vps-deployer domain list my-next-app
+vps-deployer domain remove my-next-app example.com
+vps-deployer ssl enable my-next-app --email ops@example.com
+vps-deployer ssl status my-next-app
+vps-deployer ssl renew
+vps-deployer rollback my-next-app
+vps-deployer dashboard
 ```
 
-Later phases add deploy, logs, rollback, domains, and SSL.
+The local dashboard is `http://127.0.0.1:5100/` on that VPS. SSH tunnel if you are not on the machine:
+
+```bash
+ssh -L 5100:127.0.0.1:5100 user@your-vps
+```
+
+The public website is docs and the installer only. It does not register your VPS.
 
 ## Documentation
 

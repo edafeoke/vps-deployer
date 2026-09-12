@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero" {% if active %}data-refresh="8"{% endif %}>
+  <p class="crumb"><a href="/projects">Projects</a> / {{ project.name }}</p>
+  <h1>{{ project.name }}</h1>
+  <p>{{ project.repository }} · {{ project.branch }} · {{ project.runtime }} · 127.0.0.1:{{ project.port }}</p>
+</section>
+<section class="actions" aria-label="Project actions">
+  <form method="post" action="/projects/{{ project.name }}/deploy">
+    <button type="submit">Deploy</button>
+  </form>
+  <form method="post" action="/projects/{{ project.name }}/rollback">
+    <button type="submit" data-confirm="Restore the previous successful release for {{ project.name }}?">Rollback</button>
+  </form>
+  <form method="post" action="/projects/{{ project.name }}/start">
+    <button type="submit" class="ghost">Start</button>
+  </form>
+  <form method="post" action="/projects/{{ project.name }}/stop">
+    <button type="submit" class="ghost">Stop</button>
+  </form>
+  <form method="post" action="/projects/{{ project.name }}/restart">
+    <button type="submit" class="ghost">Restart</button>
+  </form>
+</section>
+<section class="stats">
+  <article>
+    <h2>Service</h2>
+    <p class="figure {% if service.running %}pass{% else %}muted{% endif %}">
+      {% if service.running %}running{% else %}stopped{% endif %}
+    </p>
+    <p class="muted">{{ service.service_name }}</p>
+  </article>
+  <article>
+    <h2>HTTPS</h2>
+    <p class="figure {% if ssl.ssl %}pass{% else %}muted{% endif %}">
+      {% if ssl.ssl %}enabled{% else %}http only{% endif %}
+    </p>
+  </article>
+  <article>
+    <h2>Path</h2>
+    <p class="path">{{ project.deployment_path }}</p>
+  </article>
+</section>
+<section>
+  <h2>Deployments</h2>
+  {% if deployments %}
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Status</th>
+        <th>Commit</th>
+        <th>Branch</th>
+        <th>Finished</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in deployments %}
+      <tr>
+        <td>{{ row.id }}</td>
+        <td><span class="pill {{ row.status|lower }}">{{ row.status }}</span></td>
+        <td>{{ row.commit_sha or "—" }}</td>
+        <td>{{ row.branch }}</td>
+        <td>{{ row.finished_at or row.started_at or "—" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty">No deployments yet. Queue one with Deploy.</p>
+  {% endif %}
+</section>
+<section>
+  <div class="section-head">
+    <h2>Domains</h2>
+  </div>
+  {% if domains %}
+  <ul class="plain">
+    {% for row in domains %}
+    <li>
+      {{ row.hostname }}
+      {% if row.www %}<span class="muted">+ www</span>{% endif %}
+      {% if row.ssl %}<span class="pill success">ssl</span>{% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="empty">No domains attached.</p>
+  {% endif %}
+  <form class="inline" method="post" action="/projects/{{ project.name }}/domains">
+    <label>
+      Hostname
+      <input name="hostname" required placeholder="example.com" />
+    </label>
+    <label class="check">
+      <input type="checkbox" name="www" value="1" />
+      also www
+    </label>
+    <button type="submit">Attach</button>
+  </form>
+  <form class="inline" method="post" action="/projects/{{ project.name }}/ssl">
+    <label>
+      Let's Encrypt email
+      <input name="email" type="email" placeholder="ops@example.com" />
+    </label>
+    <button type="submit" class="ghost">Enable HTTPS</button>
+  </form>
+</section>
+<section>
+  <h2>Latest deployment log</h2>
+  {% if logs %}
+  <pre class="log">{% for line in logs %}{{ line }}
+{% endfor %}</pre>
+  {% else %}
+  <p class="empty">No log lines yet.</p>
+  {% endif %}
+</section>
+{% endblock %}

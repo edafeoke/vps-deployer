@@ -18,6 +18,8 @@ You do not create a website account to use VPS Deployer.
 
 - Use `set -euo pipefail`.
 - Prefer HTTPS downloads.
+- Reject release tarball members with absolute paths or `..`.
+- Unsigned checksums are still a supply-chain residual; inspect the installer before piping it to bash.
 - Support `curl -o install.sh` so you can read it first.
 - Fail closed on unsupported OS, missing disk, or failed health checks.
 - Never run `ufw reset`.
@@ -28,6 +30,8 @@ You do not create a website account to use VPS Deployer.
 
 - `vps-deployer.service` runs as user `vps-deployer`, not root.
 - The API listens on `127.0.0.1:5100`.
+- The local dashboard is the same localhost process. It is not a public website.
+- Dashboard pages must not render private keys, webhook secrets, or environment values.
 - There is no `POST /execute` or arbitrary shell endpoint.
 
 ## Privileged helper
@@ -39,7 +43,23 @@ You do not create a website account to use VPS Deployer.
 - Reject path traversal and shell metacharacters.
 - Do not interpolate untrusted input into a shell.
 
-This phase allows `service-status` and `nginx-test` only.
+Allowed actions:
+
+- `service-status`
+- `nginx-test`, `nginx-reload`, `nginx-site-check`, `nginx-site-install`, `nginx-site-remove`
+- `ssl-issue`, `ssl-renew`
+- `app-start`, `app-stop`, `app-restart`, `app-status`, `app-enable`, `app-disable`, `app-logs`
+- `app-unit-check`, `app-unit-install`, `app-unit-remove`
+
+Application units must be named `vps-deployer-app-<project>.service`. Unit files must run as `vps-deployer`, bind to `127.0.0.1`, use a port in `33000–33999`, and keep `WorkingDirectory` under `/var/www/apps/<project>/`. Shell `ExecStart` lines are rejected. Only the rendered unit keys are accepted. The only allowed `EnvironmentFile` is `-/var/www/apps/<project>/shared/env`. `service-status` may query `vps-deployer.service` or `vps-deployer-app-<project>.service` only.
+
+Nginx site files are allowlisted: listen, server_name, root, proxy_pass, proxy headers, ACME location, TLS paths, and the HTTPS redirect. Unlisted directives (`rewrite`, `fastcgi_pass`, extra `include`) are rejected.
+
+The `vps-deployer` user may run only `/usr/local/libexec/vps-deployer-helper` via `/etc/sudoers.d/vps-deployer`. That snippet is not `NOPASSWD: ALL`.
+
+Nginx site files must be named `vps-deployer-<project>.conf`. They may listen on ports 80 and 443, use `server_name` values that pass domain validation, `proxy_pass` only to `http://127.0.0.1:33000-33999`, and `root` only under `/var/www/apps/<project>/` or `/var/www/certbot`. TLS files must be `/etc/letsencrypt/live/<hostname>/fullchain.pem` and `privkey.pem`. `include`, `alias`, and shell metacharacters are rejected.
+
+`ssl-issue` accepts only a validated email and hostnames. It runs `certbot certonly --webroot` with a fixed argv list. Private keys stay on disk under `/etc/letsencrypt/` and are never written to logs or SQLite.
 
 ## Secrets
 
@@ -67,7 +87,7 @@ Reject:
 
 ## Webhooks
 
-Verify `X-Hub-Signature-256` with HMAC SHA256. Reject missing or invalid signatures, unknown repositories, and unsupported branches. Webhook payloads must not supply commands. The webhook handler returns quickly and records a `QUEUED` deployment. The deploy engine (later) processes that queue.
+Verify `X-Hub-Signature-256` with HMAC SHA256. Reject missing or invalid signatures, unknown repositories, and unsupported branches. Webhook payloads must not supply commands. The webhook handler returns quickly and records a `QUEUED` deployment. The local worker processes that queue.
 
 GitHub App private keys and webhook secrets live in the config directory (`/etc/vps-deployer/` in production, `./.local/config/` in development) with mode `600`. They are not stored in SQLite or logs.
 

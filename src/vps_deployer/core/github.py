@@ -316,6 +316,9 @@ def handle_github_webhook(
     repository, branch, commit = parse_push_payload(payload)
     try:
         queued = queue_push_event(repository, branch, commit, settings)
+        from vps_deployer.core.engine import notify_worker
+
+        notify_worker()
     except ProjectNotFoundError as exc:
         raise WebhookError(str(exc), 404) from exc
     except ValueError as exc:

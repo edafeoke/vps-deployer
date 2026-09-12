@@ -40,7 +40,7 @@ The website must not:
 
 A VPS Deployer installation must keep working if the website is unavailable. The only operations that naturally need the internet are GitHub access, Let's Encrypt, DNS, and downloading updates.
 
-Planned public routes (website phase):
+Public routes:
 
 | Path | Purpose |
 | --- | --- |
@@ -85,7 +85,7 @@ Contains:
 - Local SQLite database
 - Restricted privileged helper
 - systemd service
-- Configuration, logs, and later: deployment engine, GitHub webhooks, nginx/SSL managers
+- Configuration, logs, deployment engine, GitHub webhooks, nginx site files, and Let's Encrypt certificates
 
 Each installation is independent. It manages applications on that VPS only.
 
@@ -116,7 +116,13 @@ Each installation is independent. It manages applications on that VPS only.
 
 /usr/local/bin/vps-deployer
 /usr/local/libexec/vps-deployer-helper
+/etc/sudoers.d/vps-deployer
 /etc/systemd/system/vps-deployer.service
+/etc/systemd/system/vps-deployer-app-<project>.service
+/etc/nginx/sites-available/vps-deployer-<project>.conf
+/etc/nginx/sites-enabled/vps-deployer-<project>.conf
+/var/www/certbot/
+/etc/letsencrypt/live/<hostname>/
 ```
 
 ### Your applications
@@ -140,7 +146,7 @@ Nginx :80 / :443          (public traffic for your apps)
     ↓
 127.0.0.1:<app-port>      (application systemd unit)
 
-CLI / local dashboard
+CLI / local dashboard (`/`, `/projects`, `/doctor`)
     ↓
 127.0.0.1:5100            (vps-deployer.service, user vps-deployer)
     ↓
@@ -150,6 +156,19 @@ SQLite + privileged helper
 The FastAPI process does not run as root. Privileged operations (systemd, nginx, SSL) go through `/usr/local/libexec/vps-deployer-helper`, which allows a fixed whitelist of actions and validates every argument.
 
 The API is not exposed on the public internet by default.
+
+## Local dashboard
+
+The same FastAPI process serves an HTML console on localhost:
+
+| Path | Purpose |
+| --- | --- |
+| `/` | This VPS overview |
+| `/projects` | Add and list projects |
+| `/projects/<name>` | Deployments, domains, HTTPS, logs, start/stop/rollback |
+| `/doctor` | Local health checks |
+
+`vps-deployer dashboard` prints `http://127.0.0.1:5100/`. Reach it from another machine only through an SSH tunnel. The pages call the same local services as the CLI. They do not list other VPS instances or send data to the public website. GitHub private keys and webhook secrets are never rendered.
 
 ## System user
 
@@ -217,7 +236,22 @@ Insert deployment QUEUED
 Return immediately
 ```
 
-The webhook does not build or restart applications. That is the deployment engine phase.
+The webhook does not build or restart applications. A local worker consumes `QUEUED` deployments.
+
+## Deployment engine
+
+The API and webhook only enqueue work. A background worker on the VPS:
+
+1. Fetches the repository into a new release directory
+2. Installs dependencies and builds
+3. Starts a candidate on `127.0.0.1:<port>` when the runtime needs a process
+4. Health-checks the candidate
+5. Switches `current` only after the candidate is healthy
+6. Marks `SUCCESS` or `FAILED`
+
+If the new release fails, `current` stays on the previous successful release. Additional deployments for the same project stay `QUEUED` until that project has no `RUNNING` deployment (FIFO).
+
+Application files live under the configured apps root (`/var/www/apps` in production, `./.local/apps` in local development).
 
 ## Rollback lifecycle
 
@@ -235,7 +269,9 @@ Health check
 Record rollback
 ```
 
-The failed release stays on disk until retention cleanup. The active release is never deleted.
+The failed or replaced release stays on disk until retention cleanup. The active release is never deleted.
+
+`vps-deployer rollback <project>` restores the previous successful release (or `--to <deployment-id>`). It refuses to run while a deployment is `RUNNING`, records a `ROLLED_BACK` deployment, and puts `current` back if the restored release is unhealthy.
 
 Default retention: 5 successful releases.
 
@@ -287,7 +323,7 @@ Updating VPS Deployer must not restart or replace your deployed applications.
 
 - Local API binds to `127.0.0.1`
 - No arbitrary command execution endpoint
-- Webhook signatures will be required (later)
+- Webhook signatures are required
 - Secrets live in `/etc/vps-deployer/` with restrictive permissions
 - Secrets are never written to deployment logs
 - Project names, domains, ports, and paths are validated
@@ -310,9 +346,33 @@ See [SECURITY.md](SECURITY.md).
 
 `vps-deployer doctor` must not crash on macOS or other unsupported development machines. Missing systemd or nginx is WARN or FAIL with guidance.
 
+## Application services
+
+Process runtimes (`nextjs`, `node`, `fastapi`, `flask`, `laravel`, `php`) run as `vps-deployer-app-<project>.service` units. The API process does not start them as root. It writes a validated unit and calls the privileged helper:
+
+```
+app-unit-install / app-start / app-stop / app-restart / app-status / app-logs / app-unit-remove
+```
+
+Units bind to `127.0.0.1` and a reserved port in `33000–33999`. Static and Vite projects have no process unit.
+
+Local development uses a process runtime (pid file under the project `shared/` directory) when systemd or the helper is absent. `VPS_DEPLOYER_RUNTIME=process|systemd|auto` selects the provider.
+
+## Domains and nginx
+
+Domains are stored on this VPS and written to `vps-deployer-<project>.conf` site files. HTTP (`listen 80`) proxies process apps to `127.0.0.1:<port>` or serves static files from `/var/www/apps/<project>/current`. Optional `www` is an extra `server_name`, not a separate project.
+
+The helper installs, tests (`nginx -t`), and reloads nginx. A failed `nginx -t` rolls back the new site file and leaves other sites untouched.
+
+## HTTPS
+
+`vps-deployer ssl enable` issues a Let's Encrypt certificate through the helper (`certbot certonly --webroot`) and rewrites the site with `listen 443 ssl`. Port 80 keeps `/.well-known/acme-challenge/` and redirects other HTTP traffic to HTTPS.
+
+Certificates live in `/etc/letsencrypt/live/<hostname>/`. The helper accepts only those paths. Local development writes a short-lived self-signed certificate under the configured SSL directory. Private keys are never stored in SQLite or logs.
+
 ## Runtime abstraction
 
-Deployed applications will run through a runtime provider. The first implementation is systemd. The interface is shaped so a Docker provider can be added later without rewriting project or deployment records. Docker is not implemented in this phase.
+Deployed applications run through a runtime provider. The production implementation is systemd. The interface is shaped so a Docker provider can be added later without rewriting project or deployment records. Docker is not implemented in this phase.
 
 ## Privacy
 

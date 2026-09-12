@@ -20,12 +20,19 @@ if [[ -n "${SCRIPT_DIR:-}" && -f "${SCRIPT_DIR}/lib.sh" ]]; then
   # shellcheck source=lib.sh
   . "${SCRIPT_DIR}/lib.sh"
 else
-  echo "This installer needs installer/lib.sh next to install.sh."
-  echo "Inspect first:"
-  echo "  curl -fsSL ${VD_SITE_URL}/install.sh -o install.sh"
-  echo "Or clone the repository and run:"
-  echo "  sudo bash installer/install.sh --source /path/to/vps-deployer"
-  exit 1
+  _vd_lib="$(mktemp)"
+  if ! curl -fsSL "${VD_SITE_URL}/installer/lib.sh" -o "$_vd_lib"; then
+    echo "This installer needs installer/lib.sh."
+    echo "Inspect first:"
+    echo "  curl -fsSL ${VD_SITE_URL}/install.sh -o install.sh"
+    echo "Or clone the repository and run:"
+    echo "  sudo bash installer/install.sh --source /path/to/vps-deployer"
+    rm -f "$_vd_lib"
+    exit 1
+  fi
+  # shellcheck source=/dev/null
+  . "$_vd_lib"
+  rm -f "$_vd_lib"
 fi
 
 usage() {
@@ -145,26 +152,34 @@ resolve_source() {
     return 0
   fi
 
-  if [[ -n "$VD_VERSION" ]]; then
-    local url="${VD_SITE_URL}/releases/vps-deployer-${VD_VERSION}.tar.gz"
-    if ! vd_is_https_url "$url"; then
-      echo "Refusing non-HTTPS download." >&2
-      exit 1
-    fi
-    local tmp
-    tmp="$(mktemp -d)"
-    echo "Downloading ${url}"
-    curl -fsSL "$url" -o "${tmp}/vps-deployer.tar.gz"
-    mkdir -p "${tmp}/src"
-    tar -xzf "${tmp}/vps-deployer.tar.gz" -C "${tmp}/src" --strip-components=1
-    VD_SOURCE="${tmp}/src"
-    return 0
+  local version="${VD_VERSION:-}"
+  if [[ -z "$version" ]]; then
+    version="$(curl -fsSL "${VD_SITE_URL}/releases/latest.txt" 2>/dev/null || true)"
+    version="$(printf '%s' "$version" | tr -d '[:space:]')"
   fi
-
-  echo "No install source available."
-  echo "Until release artifacts are published, clone the repository and run:"
-  echo "  sudo bash installer/install.sh --source /path/to/vps-deployer"
-  exit 1
+  if [[ -z "$version" ]]; then
+    version="0.1.0"
+  fi
+  if ! vd_validate_semver "$version"; then
+    echo "Invalid version: ${version}" >&2
+    exit 1
+  fi
+  local url="${VD_SITE_URL}/releases/vps-deployer-${version}.tar.gz"
+  if ! vd_is_https_url "$url"; then
+    echo "Refusing non-HTTPS download." >&2
+    exit 1
+  fi
+  local tmp
+  tmp="$(mktemp -d)"
+  echo "Downloading ${url}"
+  curl -fsSL "$url" -o "${tmp}/vps-deployer.tar.gz"
+  if ! vd_tar_members_safe "${tmp}/vps-deployer.tar.gz"; then
+    echo "Refusing tarball with unsafe member paths." >&2
+    exit 1
+  fi
+  mkdir -p "${tmp}/src"
+  tar -xzf "${tmp}/vps-deployer.tar.gz" -C "${tmp}/src" --strip-components=1
+  VD_SOURCE="${tmp}/src"
 }
 
 system_check() {
@@ -260,6 +275,9 @@ install_packages() {
   if ! command -v nginx >/dev/null 2>&1; then
     apt-get install -y --no-install-recommends nginx >/dev/null
   fi
+  if ! command -v certbot >/dev/null 2>&1; then
+    apt-get install -y --no-install-recommends certbot >/dev/null
+  fi
   if ! command -v uv >/dev/null 2>&1; then
     curl -fsSL https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh
   fi
@@ -267,6 +285,7 @@ install_packages() {
   vd_mark ok "Python"
   vd_mark ok "uv"
   vd_mark ok "Nginx"
+  vd_mark ok "certbot"
   echo
 }
 
@@ -287,9 +306,13 @@ create_user_and_dirs() {
     /etc/vps-deployer/projects \
     /var/lib/vps-deployer \
     /var/log/vps-deployer/projects \
+    /var/www/apps \
+    /var/www/certbot \
     /usr/local/libexec
 
   chown -R vps-deployer:vps-deployer /opt/vps-deployer /var/lib/vps-deployer /var/log/vps-deployer
+  chown vps-deployer:vps-deployer /var/www/apps
+  chmod 755 /var/www/apps /var/www/certbot
   chmod 750 /etc/vps-deployer
 }
 
@@ -356,6 +379,16 @@ install_application() {
   install -m 0755 "${VD_SOURCE}/packaging/bin/vps-deployer" /usr/local/bin/vps-deployer
   install -m 0755 "${VD_SOURCE}/packaging/helper/vps-deployer-helper" /usr/local/libexec/vps-deployer-helper
   install -m 0644 "${VD_SOURCE}/packaging/systemd/vps-deployer.service" /etc/systemd/system/vps-deployer.service
+  if [[ -f "${VD_SOURCE}/packaging/sudoers/vps-deployer" ]]; then
+    install -m 0440 "${VD_SOURCE}/packaging/sudoers/vps-deployer" /etc/sudoers.d/vps-deployer.tmp
+    if command -v visudo >/dev/null 2>&1 && ! visudo -c -f /etc/sudoers.d/vps-deployer.tmp; then
+      rm -f /etc/sudoers.d/vps-deployer.tmp
+      echo "sudoers snippet failed validation" >&2
+      exit 1
+    fi
+    mv /etc/sudoers.d/vps-deployer.tmp /etc/sudoers.d/vps-deployer
+    chmod 0440 /etc/sudoers.d/vps-deployer
+  fi
 
   sudo -u vps-deployer -H env HOME=/var/lib/vps-deployer \
     uv run --directory "$dest" alembic upgrade head || \

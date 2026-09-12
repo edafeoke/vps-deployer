@@ -9,6 +9,7 @@ DOMAIN_RE = re.compile(
     r"^(?=.{1,253}$)(?!-)[A-Za-z0-9-]{1,63}(?<!-)(\.(?!-)[A-Za-z0-9-]{1,63}(?<!-))+$"
 )
 ENV_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+EMAIL_RE = re.compile(r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$")
 UNSAFE_CHARS = set(";&|`$(){}[]<>\\\"'\n\r\t*?")
 APPS_ROOT = Path("/var/www/apps")
 PORT_RANGE = range(33000, 34000)
@@ -69,6 +70,13 @@ def validate_domain(domain: str) -> str:
     return _reject_unsafe(candidate, "domain")
 
 
+def validate_email(email: str) -> str:
+    candidate = email.strip()
+    if not candidate or not EMAIL_RE.fullmatch(candidate) or ".." in candidate:
+        raise ValidationError("Invalid email address")
+    return _reject_unsafe(candidate, "email")
+
+
 def validate_port(port: int) -> int:
     if port not in PORT_RANGE:
         raise ValidationError(f"Port must be in {PORT_RANGE.start}-{PORT_RANGE.stop - 1}")
@@ -89,24 +97,30 @@ def validate_env_name(name: str) -> str:
     return name
 
 
-def validate_app_path(path: str | Path, project_name: str | None = None) -> Path:
+def validate_app_path(
+    path: str | Path,
+    project_name: str | None = None,
+    root: Path | None = None,
+) -> Path:
+    apps_root = root or APPS_ROOT
     raw = Path(path)
-    if raw.is_absolute() and not str(raw).startswith(str(APPS_ROOT)):
-        raise ValidationError("Application path must be under /var/www/apps/")
+    message = f"Application path must be under {apps_root}/"
+    if raw.is_absolute() and not str(raw).startswith(str(apps_root)):
+        raise ValidationError(message)
     resolved = raw if not raw.exists() else raw.resolve()
-    apps_root = APPS_ROOT.resolve() if APPS_ROOT.exists() else APPS_ROOT
+    root_resolved = apps_root.resolve() if apps_root.exists() else apps_root
     try:
-        resolved.relative_to(apps_root)
+        resolved.relative_to(root_resolved)
     except ValueError as exc:
         if raw.is_absolute():
-            raise ValidationError("Application path must be under /var/www/apps/") from exc
-        resolved = (APPS_ROOT / raw).resolve() if APPS_ROOT.exists() else APPS_ROOT / raw
+            raise ValidationError(message) from exc
+        resolved = (apps_root / raw).resolve() if apps_root.exists() else apps_root / raw
         try:
-            resolved.relative_to(apps_root if apps_root.exists() else APPS_ROOT)
+            resolved.relative_to(root_resolved if root_resolved.exists() else apps_root)
         except ValueError as inner:
-            raise ValidationError("Application path must be under /var/www/apps/") from inner
+            raise ValidationError(message) from inner
     if ".." in raw.parts:
-        raise ValidationError("Application path must be under /var/www/apps/")
+        raise ValidationError(message)
     if project_name:
         validate_project_name(project_name)
         if resolved.name != project_name and raw.name != project_name:

@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero">
+  <h1>{{ title }}</h1>
+  {% if name %}
+  <p>There is no project named <code>{{ name }}</code> on this VPS.</p>
+  {% else %}
+  <p>That project name is not valid on this VPS.</p>
+  {% endif %}
+  <p><a href="/projects">Back to projects</a></p>
+</section>
+{% endblock %}

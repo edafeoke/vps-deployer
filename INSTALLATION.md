@@ -66,10 +66,10 @@ sudo bash installer/install.sh --source /path/to/vps-deployer
 
 1. Detects root/sudo, OS, architecture, CPU, RAM, disk, and internet.
 2. Rejects unsupported systems.
-3. Installs git, Python, uv, and nginx.
+3. Installs git, Python, uv, nginx, and certbot.
 4. Creates the `vps-deployer` system user.
-5. Creates `/opt/vps-deployer`, `/etc/vps-deployer`, `/var/lib/vps-deployer`, and `/var/log/vps-deployer`.
-6. Installs the application, CLI, privileged helper, and systemd unit.
+5. Creates `/opt/vps-deployer`, `/etc/vps-deployer`, `/var/lib/vps-deployer`, `/var/log/vps-deployer`, and `/var/www/apps`.
+6. Installs the application, CLI, privileged helper, sudoers snippet, and systemd unit.
 7. Initializes the SQLite database if it does not already exist.
 8. Starts `vps-deployer.service` and checks `/health`.
 
@@ -96,7 +96,19 @@ Expected result: the service is running, the API answers on `127.0.0.1:5100`, an
    ```
 
 3. Add your first project, for example `my-next-app`.
-4. Deploy, attach `example.com`, and enable HTTPS.
+4. Open the local dashboard on the VPS (`http://127.0.0.1:5100/`), or tunnel to it:
+
+   ```bash
+   vps-deployer dashboard
+   ssh -L 5100:127.0.0.1:5100 user@your-vps
+   ```
+
+5. Deploy, attach `example.com`, and enable HTTPS:
+
+   ```bash
+   vps-deployer domain add my-next-app example.com --www
+   vps-deployer ssl enable my-next-app --email ops@example.com
+   ```
 
 ## Troubleshooting
 

@@ -1,0 +1,2 @@
+Defaults:vps-deployer !requiretty
+vps-deployer ALL=(root) NOPASSWD: /usr/local/libexec/vps-deployer-helper

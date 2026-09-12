@@ -16,6 +16,13 @@ def test_version() -> None:
     assert get_version() in result.stdout
 
 
+def test_cli_dashboard(tmp_env) -> None:
+    result = runner.invoke(app, ["dashboard"])
+    assert result.exit_code == 0
+    assert "http://127.0.0.1:51999/" in result.stdout
+    assert "localhost" in result.stdout
+
+
 def test_doctor(tmp_env) -> None:
     result = runner.invoke(app, ["doctor"])
     assert "VPS Deployer doctor" in result.stdout
@@ -118,3 +125,78 @@ def test_github_configure_and_status(tmp_env) -> None:
     assert status.exit_code == 0
     assert "app_id: 12345" in status.stdout
     assert "supersecret" not in status.stdout
+
+
+def test_cli_deploy_queues(tmp_env, client: TestClient, monkeypatch) -> None:
+    fake = _proxy_api(client)
+    monkeypatch.setattr("vps_deployer.cli.main.api_request", fake)
+    add = runner.invoke(
+        app,
+        ["project", "add", "my-next-app", "--repository", "example/my-next-app"],
+    )
+    assert add.exit_code == 0, add.output
+    result = runner.invoke(app, ["deploy", "my-next-app"])
+    assert result.exit_code == 0, result.output
+    assert "Queued deployment" in result.stdout
+    rolled = runner.invoke(app, ["rollback", "my-next-app"])
+    assert rolled.exit_code == 1
+
+
+def test_cli_domain_add_list_remove(tmp_env, client: TestClient, monkeypatch) -> None:
+    fake = _proxy_api(client)
+    monkeypatch.setattr("vps_deployer.cli.main.api_request", fake)
+    monkeypatch.setattr("vps_deployer.cli.main.api_get", lambda path, **kw: fake("GET", path))
+    add = runner.invoke(
+        app,
+        ["project", "add", "my-next-app", "--repository", "example/my-next-app"],
+    )
+    assert add.exit_code == 0, add.output
+    attached = runner.invoke(app, ["domain", "add", "my-next-app", "example.com", "--www"])
+    assert attached.exit_code == 0, attached.output
+    assert "Attached example.com" in attached.stdout
+    listed = runner.invoke(app, ["domain", "list", "my-next-app"])
+    assert listed.exit_code == 0, listed.output
+    assert "example.com" in listed.stdout
+    removed = runner.invoke(app, ["domain", "remove", "my-next-app", "example.com"])
+    assert removed.exit_code == 0, removed.output
+
+
+def test_cli_ssl_enable(tmp_env, client: TestClient, monkeypatch) -> None:
+    fake = _proxy_api(client)
+    monkeypatch.setattr("vps_deployer.cli.main.api_request", fake)
+    add = runner.invoke(
+        app,
+        ["project", "add", "my-next-app", "--repository", "example/my-next-app"],
+    )
+    assert add.exit_code == 0, add.output
+    domain = runner.invoke(app, ["domain", "add", "my-next-app", "example.com"])
+    assert domain.exit_code == 0, domain.output
+    enabled = runner.invoke(app, ["ssl", "enable", "my-next-app", "--email", "ops@example.com"])
+    assert enabled.exit_code == 0, enabled.output
+    assert "HTTPS enabled" in enabled.stdout
+    status = runner.invoke(app, ["ssl", "status", "my-next-app"])
+    assert status.exit_code == 0, status.output
+    assert "ssl: True" in status.stdout
+
+
+def test_cli_start_stop_static(tmp_env, client: TestClient, monkeypatch) -> None:
+    fake = _proxy_api(client)
+    monkeypatch.setattr("vps_deployer.cli.main.api_request", fake)
+    add = runner.invoke(
+        app,
+        [
+            "project",
+            "add",
+            "my-site",
+            "--repository",
+            "example/my-site",
+            "--runtime",
+            "static",
+        ],
+    )
+    assert add.exit_code == 0, add.output
+    started = runner.invoke(app, ["start", "my-site"])
+    assert started.exit_code == 0, started.output
+    assert "no process" in started.stdout
+    stopped = runner.invoke(app, ["stop", "my-site"])
+    assert stopped.exit_code == 0, stopped.output

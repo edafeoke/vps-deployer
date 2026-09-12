@@ -1,3 +1,7 @@
+website/node_modules/
+website/.next/
+website/.release-staging/
+website/public/releases/*.tar.gz
 .venv/
 .local/
 __pycache__/

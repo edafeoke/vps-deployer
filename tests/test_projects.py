@@ -23,8 +23,8 @@ def test_create_show_delete_project(client: TestClient) -> None:
     assert body["repository"] == "example/my-next-app"
     assert body["branch"] == "main"
     assert body["runtime"] == "nextjs"
-    assert body["deployment_path"] == "/var/www/apps/my-next-app"
-    assert body["service_name"] == "my-next-app"
+    assert body["deployment_path"].endswith("/apps/my-next-app")
+    assert body["service_name"] == "vps-deployer-app-my-next-app"
     assert 33000 <= body["port"] <= 33999
 
     shown = client.get("/api/projects/my-next-app")

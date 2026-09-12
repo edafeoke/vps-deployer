@@ -62,4 +62,24 @@ if vd_safe_project_name 'app;reboot'; then
 fi
 pass "project name safety"
 
+safe_tar="$(mktemp -d)"
+printf 'ok\n' >"${safe_tar}/readme"
+COPYFILE_DISABLE=1 tar -czf "${safe_tar}/safe.tgz" -C "$safe_tar" readme
+vd_tar_members_safe "${safe_tar}/safe.tgz" || fail "safe tarball"
+python3 - "$safe_tar/unsafe.tgz" <<'PY'
+import sys
+import tarfile
+
+path = sys.argv[1]
+with tarfile.open(path, "w:gz") as archive:
+    info = tarfile.TarInfo("../etc/passwd")
+    info.size = 0
+    archive.addfile(info)
+PY
+if vd_tar_members_safe "${safe_tar}/unsafe.tgz"; then
+  fail "unsafe tarball must be rejected"
+fi
+rm -rf "$safe_tar"
+pass "tarball member safety"
+
 echo "All installer library tests passed."

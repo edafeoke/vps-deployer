@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import time
 from pathlib import Path
 
 import typer
@@ -26,8 +27,12 @@ app = typer.Typer(
 )
 project_app = typer.Typer(help="Manage projects on this VPS.")
 github_app = typer.Typer(help="Configure the GitHub App for this VPS.")
+domain_app = typer.Typer(help="Attach domains on this VPS.")
+ssl_app = typer.Typer(help="Enable HTTPS on this VPS.")
 app.add_typer(project_app, name="project")
 app.add_typer(github_app, name="github")
+app.add_typer(domain_app, name="domain")
+app.add_typer(ssl_app, name="ssl")
 
 console = Console()
 error_console = Console(stderr=True)
@@ -56,6 +61,14 @@ def status() -> None:
         console.print(f"API: {api.get('host')}:{api.get('port')} healthy={api.get('healthy')}")
     if isinstance(database, dict):
         console.print(f"Database: healthy={database.get('healthy')} path={database.get('path')}")
+
+
+@app.command()
+def dashboard() -> None:
+    """Print the local dashboard URL for this VPS."""
+    settings = get_settings()
+    console.print(f"Local dashboard: {settings.api_base_url}/")
+    console.print("This page is only available on this VPS (localhost).")
 
 
 @app.command()
@@ -146,6 +159,195 @@ def project_remove(
     payload = _api("DELETE", f"/api/projects/{name}")
     console.print(f"Removed project {payload.get('name', name)}")
     console.print("Application files were not deleted.")
+
+
+@app.command()
+def deploy(
+    name: str,
+    commit: str | None = typer.Option(None, "--commit", help="Commit SHA to deploy"),
+    wait: bool = typer.Option(False, "--wait", help="Wait until the worker finishes"),
+) -> None:
+    """Queue a deployment for a project on this VPS."""
+    body: dict[str, object] = {}
+    if commit:
+        body["commit"] = commit
+    payload = _api("POST", f"/api/projects/{name}/deploy", body or None)
+    deployment = payload.get("deployment")
+    deployment_id = deployment.get("id") if isinstance(deployment, dict) else None
+    console.print(f"Queued deployment {deployment_id} for {name}")
+    if not wait:
+        console.print("The worker builds and activates the release asynchronously.")
+        return
+    for _ in range(180):
+        listing = _api("GET", f"/api/projects/{name}/deployments")
+        rows = listing.get("deployments")
+        if isinstance(rows, list) and rows:
+            latest = rows[0]
+            if isinstance(latest, dict):
+                status = latest.get("status")
+                console.print(f"status: {status}")
+                if status == "SUCCESS":
+                    return
+                if status == "FAILED":
+                    error_console.print(str(latest.get("error_message") or "Deployment failed"))
+                    raise typer.Exit(code=1)
+        time.sleep(1)
+    error_console.print("Timed out waiting for the deployment worker")
+    raise typer.Exit(code=1)
+
+
+@app.command()
+def rollback(
+    name: str,
+    to: int | None = typer.Option(None, "--to", help="Deployment ID to restore"),
+) -> None:
+    """Restore the previous successful release on this VPS."""
+    body: dict[str, object] = {}
+    if to is not None:
+        body["deployment_id"] = to
+    payload = _api("POST", f"/api/projects/{name}/rollback", body or None)
+    deployment = payload.get("deployment")
+    deployment_id = deployment.get("id") if isinstance(deployment, dict) else None
+    console.print(f"Rolled back {name} to deployment {deployment_id}")
+    if isinstance(deployment, dict) and deployment.get("commit_sha"):
+        console.print(f"commit: {deployment.get('commit_sha')}")
+    console.print(f"status: {payload.get('status')}")
+
+
+@app.command()
+def logs(
+    name: str,
+    deployment: int | None = typer.Option(None, "--deployment", help="Deployment ID"),
+    service: bool = typer.Option(False, "--service", help="Show application process logs"),
+) -> None:
+    """Show deployment or application service logs for a project."""
+    if service:
+        path = f"/api/projects/{name}/service/logs"
+    else:
+        path = f"/api/projects/{name}/logs"
+        if deployment is not None:
+            path = f"{path}?deployment_id={deployment}"
+    payload = _api("GET", path)
+    lines = payload.get("lines", [])
+    if not isinstance(lines, list) or not lines:
+        console.print("No logs yet.")
+        return
+    for line in lines:
+        console.print(str(line))
+
+
+@app.command()
+def start(name: str) -> None:
+    """Start the application process or systemd unit on this VPS."""
+    payload = _api("POST", f"/api/projects/{name}/start")
+    console.print(f"{payload.get('name')}: {payload.get('detail', 'started')}")
+    console.print(f"running: {payload.get('running')}")
+    console.print(f"service: {payload.get('service_name')}")
+
+
+@app.command()
+def stop(name: str) -> None:
+    """Stop the application process or systemd unit on this VPS."""
+    payload = _api("POST", f"/api/projects/{name}/stop")
+    console.print(f"{payload.get('name')}: {payload.get('detail', 'stopped')}")
+    console.print(f"running: {payload.get('running')}")
+
+
+@app.command()
+def restart(name: str) -> None:
+    """Restart the application process or systemd unit on this VPS."""
+    payload = _api("POST", f"/api/projects/{name}/restart")
+    console.print(f"{payload.get('name')}: {payload.get('detail', 'restarted')}")
+    console.print(f"running: {payload.get('running')}")
+
+
+@domain_app.command("list")
+def domain_list(name: str) -> None:
+    """List domains attached to a project on this VPS."""
+    payload = _api("GET", f"/api/projects/{name}/domains")
+    rows = payload.get("domains", [])
+    if not isinstance(rows, list) or not rows:
+        console.print("No domains yet.")
+        return
+    table = Table(title=f"Domains for {name}")
+    table.add_column("Hostname")
+    table.add_column("www")
+    table.add_column("ssl")
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        table.add_row(
+            str(row.get("hostname", "")),
+            "yes" if row.get("www") else "no",
+            "yes" if row.get("ssl") else "no",
+        )
+    console.print(table)
+
+
+@domain_app.command("add")
+def domain_add(
+    name: str,
+    hostname: str,
+    www: bool = typer.Option(False, "--www", help="Also serve www.<hostname>"),
+) -> None:
+    """Attach a domain to a project and write the nginx site."""
+    payload = _api(
+        "POST",
+        f"/api/projects/{name}/domains",
+        {"hostname": hostname, "www": www},
+    )
+    console.print(f"Attached {payload.get('hostname')} to {name}")
+    if payload.get("www"):
+        console.print(f"www.{payload.get('hostname')} is also served")
+    console.print("Next: vps-deployer ssl enable " + name)
+
+
+@domain_app.command("remove")
+def domain_remove(name: str, hostname: str) -> None:
+    """Detach a domain and update the nginx site."""
+    _api("DELETE", f"/api/projects/{name}/domains/{hostname}")
+    console.print(f"Removed {hostname} from {name}")
+
+
+@ssl_app.command("enable")
+def ssl_enable(
+    name: str,
+    hostname: str | None = typer.Argument(None, help="Hostname, or all project domains"),
+    email: str | None = typer.Option(None, "--email", help="Let's Encrypt notice address"),
+) -> None:
+    """Issue a certificate and serve the project over HTTPS."""
+    body: dict[str, object] = {}
+    if hostname:
+        body["hostname"] = hostname
+    if email:
+        body["email"] = email
+    payload = _api("POST", f"/api/projects/{name}/ssl", body or None)
+    console.print(f"HTTPS enabled for {payload.get('project')}")
+    console.print(f"certificate: {payload.get('certificate')}")
+    hosts = payload.get("hostnames")
+    if isinstance(hosts, list):
+        console.print("hostnames: " + ", ".join(str(item) for item in hosts))
+
+
+@ssl_app.command("status")
+def ssl_status_cmd(name: str) -> None:
+    """Show HTTPS status for a project on this VPS."""
+    payload = _api("GET", f"/api/projects/{name}/ssl")
+    console.print(f"project: {payload.get('project')}")
+    console.print(f"ssl: {payload.get('ssl')}")
+    console.print(f"email: {payload.get('email')}")
+    rows = payload.get("domains", [])
+    if isinstance(rows, list):
+        for row in rows:
+            if isinstance(row, dict):
+                console.print(f"{row.get('hostname')}: ssl={row.get('ssl')} www={row.get('www')}")
+
+
+@ssl_app.command("renew")
+def ssl_renew() -> None:
+    """Renew certificates on this VPS."""
+    payload = _api("POST", "/api/ssl/renew")
+    console.print(f"renewed: {payload.get('renewed')} mode={payload.get('mode')}")
 
 
 @github_app.command("status")

@@ -7,7 +7,7 @@ from sqlmodel import Session, select
 from vps_deployer.core.config import Settings, get_settings
 from vps_deployer.core.projects import ProjectNotFoundError, get_project, list_projects
 from vps_deployer.core.validation import validate_branch, validate_repository
-from vps_deployer.db.models import Deployment, Project
+from vps_deployer.db.models import Deployment, DeploymentLog, Project
 from vps_deployer.db.session import get_engine, init_db
 
 ACTIVE_STATUSES = frozenset({"QUEUED", "RUNNING"})
@@ -42,7 +42,7 @@ def find_projects_for_repository(
 
 def queue_deployment(
     project_name: str,
-    commit_sha: str,
+    commit_sha: str | None,
     branch: str,
     settings: Settings | None = None,
 ) -> Deployment:
@@ -83,6 +83,30 @@ def list_deployments(project_name: str, settings: Settings | None = None) -> lis
             session.expunge(row)
         rows.sort(key=lambda item: item.id or 0, reverse=True)
         return rows
+
+
+def list_deployment_logs(
+    project_name: str,
+    deployment_id: int | None = None,
+    settings: Settings | None = None,
+) -> list[str]:
+    rows = list_deployments(project_name, settings)
+    if not rows:
+        return []
+    chosen = rows[0]
+    if deployment_id is not None:
+        match = next((row for row in rows if row.id == deployment_id), None)
+        if match is None:
+            raise DeploymentNotFoundError(f"Deployment not found: {deployment_id}")
+        chosen = match
+    assert chosen.id is not None
+    current = settings or get_settings()
+    init_db(current)
+    with Session(get_engine(current)) as session:
+        query = select(DeploymentLog).where(DeploymentLog.deployment_id == chosen.id)
+        logs = list(session.exec(query).all())
+        logs.sort(key=lambda item: item.id or 0)
+        return [row.message for row in logs]
 
 
 def queue_push_event(
