@@ -307,15 +307,18 @@ Sources, in order:
 
 ## Update lifecycle
 
-`vps-deployer update` (later phase):
+`vps-deployer update`:
 
-1. Detect current version
-2. Download and verify the new release
-3. Install the new platform files
-4. Preserve configuration, database, and your applications
-5. Run migrations
-6. Restart `vps-deployer.service`
-7. Health-check; roll back the platform update if startup fails
+1. Detect the current version
+2. Resolve `--version`, or `GET {site_url}/releases/latest.txt`
+3. Download `{site_url}/install.sh` over HTTPS
+4. Re-run the installer with `--version` or `--source`
+5. The installer preserves configuration, the database, and your applications
+6. Run migrations
+7. Restart `vps-deployer.service`
+8. Health-check; roll back the platform update if startup fails
+
+`--force` re-runs the installer when the installed version already matches. The CLI does not download the release tarball or restart application units.
 
 Updating VPS Deployer must not restart or replace your deployed applications.
 

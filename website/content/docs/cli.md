@@ -3,7 +3,7 @@ title: CLI
 summary: Commands for this VPS Deployer installation.
 ---
 
-The CLI talks to `http://127.0.0.1:5100` except `version`, `doctor`, `dashboard`, and `github configure` / `github status`.
+The CLI talks to `http://127.0.0.1:5100` except `version`, `doctor`, `dashboard`, `github configure` / `github status`, `update`, and `uninstall`.
 
 ```bash
 vps-deployer version
@@ -36,4 +36,11 @@ vps-deployer ssl enable my-next-app --email ops@example.com
 vps-deployer ssl status my-next-app
 vps-deployer ssl renew
 vps-deployer rollback my-next-app
+sudo vps-deployer update
+sudo vps-deployer update --yes
+sudo vps-deployer update --version 0.1.0
+sudo vps-deployer update --source /path/to/vps-deployer
+sudo vps-deployer update --force
+vps-deployer uninstall
+vps-deployer uninstall --purge --yes
 ```

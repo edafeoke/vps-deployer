@@ -1,18 +1,20 @@
 ---
 title: Updating
-summary: How a future platform update is intended to work.
+summary: Update VPS Deployer on this VPS.
 ---
 
-`vps-deployer update` is not in this release. The intended flow:
+```bash
+sudo vps-deployer update
+sudo vps-deployer update --yes
+sudo vps-deployer update --version 0.1.0
+sudo vps-deployer update --source /path/to/vps-deployer
+sudo vps-deployer update --force
+```
 
-1. Detect the current version
-2. Download and verify the new release from this website
-3. Install platform files
-4. Preserve configuration, the database, and your applications
-5. Run migrations
-6. Restart `vps-deployer.service`
-7. Health-check; roll back the platform update if startup fails
+Must run as root. The command asks for confirmation unless `--yes`. `--source` and `--version` cannot be used together.
 
-Updating VPS Deployer must not restart or replace your deployed applications.
+It reads the installed version, then uses `--version` or `GET https://vps-deployer.onebitstack.com/releases/latest.txt`. If those versions match, it stops unless you pass `--force`.
 
-Until that command exists, re-run the installer with `--source` or `--version`. Config and `/var/www/apps` are preserved.
+Then it downloads `install.sh` over HTTPS and re-runs the installer. The installer snapshots `/opt/vps-deployer/app`, preserves `/etc/vps-deployer`, the SQLite database, and `/var/www/apps`, migrates, restarts `vps-deployer.service`, checks `/health`, and restores the previous platform files if startup fails.
+
+Updating VPS Deployer does not restart or replace your deployed applications.

@@ -30,6 +30,8 @@ from vps_deployer.core.github import (
 )
 from vps_deployer.core.nginx import NginxError
 from vps_deployer.core.ssl import SslError
+from vps_deployer.core.uninstall import UninstallError, run_uninstall
+from vps_deployer.core.update import UpdateError, run_update
 from vps_deployer.core.validation import ValidationError
 from vps_deployer.core.version import get_version
 
@@ -201,6 +203,71 @@ def doctor() -> None:
     console.print(f"PASS {summary['pass']}   WARN {summary['warn']}   FAIL {summary['fail']}")
     if not payload["ok"]:
         raise typer.Exit(code=1)
+
+
+@app.command()
+def update(
+    yes: bool = typer.Option(False, "--yes", help="Do not ask for confirmation"),
+    version: str | None = typer.Option(
+        None,
+        "--version",
+        help="Install this release version from the product website",
+    ),
+    source: Path | None = typer.Option(
+        None,
+        "--source",
+        help="Install from a local checkout instead of a published release",
+    ),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        help="Re-run the installer even when the installed version matches",
+    ),
+) -> None:
+    """Update VPS Deployer on this VPS. Applications are kept."""
+    if not yes and not typer.confirm("Update VPS Deployer on this VPS? Applications will be kept."):
+        raise typer.Abort()
+    try:
+        result = run_update(
+            version=version,
+            source=source,
+            force=force,
+            site_url=get_settings().site_url,
+        )
+    except UpdateError as exc:
+        error_console.print(str(exc))
+        raise typer.Exit(code=1) from exc
+    if result.skipped:
+        console.print(result.message)
+
+
+@app.command()
+def uninstall(
+    yes: bool = typer.Option(False, "--yes", help="Do not ask for confirmation"),
+    purge: bool = typer.Option(
+        False,
+        "--purge",
+        help="Also remove applications, app units, and app nginx sites",
+    ),
+) -> None:
+    """Remove VPS Deployer from this VPS. Applications are kept unless --purge."""
+    if purge:
+        prompt = "Remove VPS Deployer and all applications on this VPS?"
+    else:
+        prompt = "Remove VPS Deployer from this VPS? Applications will be kept."
+    if not yes and not typer.confirm(prompt):
+        raise typer.Abort()
+    try:
+        result = run_uninstall(purge=purge)
+    except UninstallError as exc:
+        error_console.print(str(exc))
+        raise typer.Exit(code=1) from exc
+    for path in result.removed:
+        console.print(f"removed {path}")
+    if purge:
+        console.print("VPS Deployer and applications were removed.")
+    else:
+        console.print("VPS Deployer was removed. Applications were not deleted.")
 
 
 @app.command()

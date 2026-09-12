@@ -1,12 +1,20 @@
 import { execFileSync } from "node:child_process";
-import { copyFileSync, cpSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+function readPackageVersion(pyproject) {
+  const match = readFileSync(pyproject, "utf8").match(/^version\s*=\s*"([^"]+)"/m);
+  if (!match) {
+    throw new Error(`Unable to read version from ${pyproject}`);
+  }
+  return match[1];
+}
+
 const website = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const root = resolve(website, "..");
-const version = "0.1.0";
+const version = readPackageVersion(resolve(root, "pyproject.toml"));
 const publicDir = resolve(website, "public");
 const releasesDir = resolve(publicDir, "releases");
 const installerDir = resolve(publicDir, "installer");

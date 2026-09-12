@@ -34,6 +34,13 @@ def test_website_docs_match_architecture() -> None:
     assert slugs == EXPECTED_DOCS
 
 
+def test_prepare_public_reads_pyproject_version() -> None:
+    text = (ROOT / "website" / "scripts" / "prepare-public.mjs").read_text(encoding="utf-8")
+    assert "pyproject.toml" in text
+    assert "readPackageVersion" in text
+    assert 'const version = "0.1.0"' not in text
+
+
 def test_installer_can_bootstrap_from_website() -> None:
     text = (ROOT / "installer" / "install.sh").read_text(encoding="utf-8")
     assert "${VD_SITE_URL}/installer/lib.sh" in text

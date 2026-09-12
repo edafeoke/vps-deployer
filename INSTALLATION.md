@@ -75,6 +75,8 @@ sudo bash installer/install.sh --source /path/to/vps-deployer
 
 The installer is idempotent. Running it again preserves configuration, the database, your applications, nginx site files, and application systemd units. If the new platform files fail health checks, it restores the previous `/opt/vps-deployer/app`, CLI, helper, and systemd unit. Your applications are never rolled back.
 
+To remove the platform later: `sudo vps-deployer uninstall`. Add `--purge` only if you also want applications deleted.
+
 ## Verify
 
 ```bash
