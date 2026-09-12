@@ -173,6 +173,10 @@ resolve_source() {
   tmp="$(mktemp -d)"
   echo "Downloading ${url}"
   curl -fsSL "$url" -o "${tmp}/vps-deployer.tar.gz"
+  if ! vd_tar_members_safe "${tmp}/vps-deployer.tar.gz"; then
+    echo "Refusing tarball with unsafe member paths." >&2
+    exit 1
+  fi
   mkdir -p "${tmp}/src"
   tar -xzf "${tmp}/vps-deployer.tar.gz" -C "${tmp}/src" --strip-components=1
   VD_SOURCE="${tmp}/src"
