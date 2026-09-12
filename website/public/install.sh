@@ -60,9 +60,15 @@ log() {
   fi
 }
 
+VD_BACKUP=""
+
 fail() {
+  trap - ERR
   echo
   echo "Installation failed."
+  if restore_previous_install; then
+    echo "Previous platform files were restored. Your applications were not changed."
+  fi
   if [[ -n "${VD_LOG:-}" ]]; then
     echo "Log: ${VD_LOG}"
   fi
@@ -313,7 +319,16 @@ create_user_and_dirs() {
   chown -R vps-deployer:vps-deployer /opt/vps-deployer /var/lib/vps-deployer /var/log/vps-deployer
   chown vps-deployer:vps-deployer /var/www/apps
   chmod 755 /var/www/apps /var/www/certbot
+  chown root:vps-deployer /etc/vps-deployer
   chmod 750 /etc/vps-deployer
+  if [[ -d /etc/vps-deployer/projects ]]; then
+    chown root:vps-deployer /etc/vps-deployer/projects
+    chmod 750 /etc/vps-deployer/projects
+  fi
+  if [[ -n "${SUDO_USER:-}" && "${SUDO_USER}" != "root" ]] && getent passwd "$SUDO_USER" >/dev/null; then
+    usermod -aG vps-deployer "$SUDO_USER"
+    log "added ${SUDO_USER} to vps-deployer group"
+  fi
 }
 
 write_config() {
@@ -328,10 +343,12 @@ VPS_DEPLOYER_LOG_DIR=/var/log/vps-deployer
 VPS_DEPLOYER_DATABASE_PATH=/var/lib/vps-deployer/vps-deployer.db
 VPS_DEPLOYER_CREATE_TABLES=true
 EOF
-    chmod 600 /etc/vps-deployer/config.env
-    chown vps-deployer:vps-deployer /etc/vps-deployer/config.env
   else
     log "preserving existing /etc/vps-deployer/config.env"
+  fi
+  if [[ -f /etc/vps-deployer/config.env ]]; then
+    chown vps-deployer:vps-deployer /etc/vps-deployer/config.env
+    chmod 640 /etc/vps-deployer/config.env
   fi
 
   if vd_should_write_file /etc/vps-deployer/config.json; then
@@ -349,11 +366,79 @@ EOF
   fi
 }
 
+snapshot_existing() {
+  if [[ ! -d /opt/vps-deployer/app/src/vps_deployer ]]; then
+    return 0
+  fi
+  local staging="/opt/vps-deployer/releases/pre-install.staging"
+  local dest="/opt/vps-deployer/releases/pre-install"
+  rm -rf "$staging"
+  mkdir -p "$staging/libexec"
+  rsync -a /opt/vps-deployer/app/ "$staging/app/"
+  if [[ -x /usr/local/bin/vps-deployer ]]; then
+    cp -a /usr/local/bin/vps-deployer "$staging/vps-deployer"
+  fi
+  if [[ -x /usr/local/libexec/vps-deployer-helper ]]; then
+    cp -a /usr/local/libexec/vps-deployer-helper "$staging/libexec/"
+  fi
+  if [[ -f /etc/systemd/system/vps-deployer.service ]]; then
+    cp -a /etc/systemd/system/vps-deployer.service "$staging/vps-deployer.service"
+  fi
+  if [[ -f /etc/sudoers.d/vps-deployer ]]; then
+    cp -a /etc/sudoers.d/vps-deployer "$staging/sudoers"
+  fi
+  rm -rf "$dest"
+  mv "$staging" "$dest"
+  VD_BACKUP="$dest"
+  log "snapshot ${VD_BACKUP}"
+}
+
+restore_previous_install() {
+  if [[ -z "${VD_BACKUP:-}" || ! -d "${VD_BACKUP}/app" ]]; then
+    return 1
+  fi
+  echo "Restoring previous VPS Deployer files..."
+  rsync -a --delete "${VD_BACKUP}/app/" /opt/vps-deployer/app/ || return 1
+  chown -R vps-deployer:vps-deployer /opt/vps-deployer
+  if [[ -f "${VD_BACKUP}/vps-deployer" ]]; then
+    install -m 0755 "${VD_BACKUP}/vps-deployer" /usr/local/bin/vps-deployer
+  fi
+  if [[ -f "${VD_BACKUP}/libexec/vps-deployer-helper" ]]; then
+    install -m 0755 "${VD_BACKUP}/libexec/vps-deployer-helper" /usr/local/libexec/vps-deployer-helper
+  fi
+  if [[ -f "${VD_BACKUP}/vps-deployer.service" ]]; then
+    install -m 0644 "${VD_BACKUP}/vps-deployer.service" /etc/systemd/system/vps-deployer.service
+  fi
+  if [[ -f "${VD_BACKUP}/sudoers" ]]; then
+    install -m 0440 "${VD_BACKUP}/sudoers" /etc/sudoers.d/vps-deployer
+  fi
+  if [[ "$VD_SKIP_SERVICE_START" != "1" ]] && command -v systemctl >/dev/null 2>&1; then
+    systemctl daemon-reload || true
+    systemctl restart vps-deployer.service || true
+  fi
+  log "restored ${VD_BACKUP}"
+  return 0
+}
+
+run_uv_as_app_user() {
+  # uv reads uv.toml from the current directory. Do not run it from the
+  # invoking user's home (often mode 750), or vps-deployer gets EACCES.
+  sudo -u vps-deployer -H env \
+    HOME=/var/lib/vps-deployer \
+    XDG_CACHE_HOME=/var/lib/vps-deployer/.cache \
+    XDG_CONFIG_HOME=/var/lib/vps-deployer/.config \
+    UV_CACHE_DIR=/var/lib/vps-deployer/.cache/uv \
+    UV_PYTHON_INSTALL_DIR=/var/lib/vps-deployer/.local/share/uv/python \
+    UV_NO_CONFIG=1 \
+    /bin/bash -c 'cd /opt/vps-deployer/app && exec "$@"' bash "$@"
+}
+
 install_application() {
   echo "Installing VPS Deployer..."
   echo
   local dest="/opt/vps-deployer/app"
   mkdir -p "$dest"
+  snapshot_existing
 
   rsync -a --delete \
     --exclude '.venv' \
@@ -365,16 +450,16 @@ install_application() {
     "${VD_SOURCE}/" "${dest}/"
 
   chown -R vps-deployer:vps-deployer /opt/vps-deployer
-  sudo -u vps-deployer -H /usr/local/bin/uv --version >/dev/null 2>&1 || true
+  mkdir -p /var/lib/vps-deployer/.cache/uv /var/lib/vps-deployer/.config
+  chown -R vps-deployer:vps-deployer /var/lib/vps-deployer
   if [[ ! -x /usr/local/bin/uv ]]; then
     if command -v uv >/dev/null 2>&1; then
       install -m 0755 "$(command -v uv)" /usr/local/bin/uv
     fi
   fi
-  sudo -u vps-deployer -H env HOME=/var/lib/vps-deployer \
-    uv python install 3.12
-  sudo -u vps-deployer -H env HOME=/var/lib/vps-deployer \
-    uv sync --frozen --no-dev --directory "$dest"
+  run_uv_as_app_user uv --version >/dev/null 2>&1 || true
+  run_uv_as_app_user uv python install 3.12
+  run_uv_as_app_user uv sync --frozen --no-dev --directory "$dest"
 
   install -m 0755 "${VD_SOURCE}/packaging/bin/vps-deployer" /usr/local/bin/vps-deployer
   install -m 0755 "${VD_SOURCE}/packaging/helper/vps-deployer-helper" /usr/local/libexec/vps-deployer-helper
@@ -384,16 +469,15 @@ install_application() {
     if command -v visudo >/dev/null 2>&1 && ! visudo -c -f /etc/sudoers.d/vps-deployer.tmp; then
       rm -f /etc/sudoers.d/vps-deployer.tmp
       echo "sudoers snippet failed validation" >&2
-      exit 1
+      fail
     fi
     mv /etc/sudoers.d/vps-deployer.tmp /etc/sudoers.d/vps-deployer
     chmod 0440 /etc/sudoers.d/vps-deployer
   fi
 
-  sudo -u vps-deployer -H env HOME=/var/lib/vps-deployer \
-    uv run --directory "$dest" alembic upgrade head || \
-    sudo -u vps-deployer -H env HOME=/var/lib/vps-deployer \
-      uv run --directory "$dest" python -c "from vps_deployer.db.session import init_db; init_db()"
+  run_uv_as_app_user uv run --directory "$dest" alembic upgrade head || \
+    run_uv_as_app_user uv run --directory "$dest" python -c \
+      "from vps_deployer.db.session import init_db; init_db()"
 
   vd_mark ok "Application"
   vd_mark ok "Configuration"
@@ -425,13 +509,13 @@ start_service() {
   else
     vd_mark fail "Service running"
     systemctl status vps-deployer.service --no-pager || true
-    exit 1
+    fail
   fi
   if curl -fsS --max-time 5 http://127.0.0.1:5100/health | grep -q ok; then
     vd_mark ok "API healthy"
   else
     vd_mark fail "API healthy"
-    exit 1
+    fail
   fi
   vd_mark ok "Database healthy"
   vd_mark ok "Deployment engine healthy"

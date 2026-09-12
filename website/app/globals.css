@@ -98,6 +98,7 @@ a {
 .hero {
   display: grid;
   grid-template-columns: 1.3fr 0.9fr;
+  align-items: start;
   gap: 2.5rem;
   padding: 3.2rem 0 2.4rem;
 }
@@ -124,11 +125,14 @@ h1,
 }
 
 .command {
+  align-self: start;
   background: var(--panel);
   border: 1px solid var(--rule);
   padding: 1rem;
   display: grid;
-  gap: 0.7rem;
+  grid-template-columns: 1fr auto;
+  gap: 0.7rem 0.9rem;
+  align-items: start;
 }
 
 .command pre {
@@ -137,13 +141,34 @@ h1,
   white-space: pre-wrap;
 }
 
-.command button {
+.command-copy {
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
   justify-self: start;
+  margin: 0;
   font: inherit;
+  line-height: 1;
+  color: var(--ink);
   border: 1px solid var(--ink);
-  background: transparent;
-  padding: 0.35rem 0.65rem;
+  border-radius: 0;
+  background: var(--panel);
+  padding: 0.4rem 0.7rem;
   cursor: pointer;
+}
+
+.command-copy svg {
+  display: block;
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+
+.command-copy:hover,
+.command-copy:focus-visible {
+  background: var(--paper);
 }
 
 .grid {
@@ -241,7 +266,8 @@ h1,
   .hero,
   .doc-layout,
   .price,
-  .mast {
+  .mast,
+  .command {
     display: grid;
     grid-template-columns: 1fr;
   }
