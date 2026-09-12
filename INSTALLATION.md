@@ -73,7 +73,7 @@ sudo bash installer/install.sh --source /path/to/vps-deployer
 7. Initializes the SQLite database if it does not already exist.
 8. Starts `vps-deployer.service` and checks `/health`.
 
-The installer is idempotent. Running it again preserves configuration, the database, your applications, nginx site files, and application systemd units.
+The installer is idempotent. Running it again preserves configuration, the database, your applications, nginx site files, and application systemd units. If the new platform files fail health checks, it restores the previous `/opt/vps-deployer/app`, CLI, helper, and systemd unit. Your applications are never rolled back.
 
 ## Verify
 
@@ -129,6 +129,13 @@ journalctl -u vps-deployer
 ss -ltnp
 df -h
 free -h
+```
+
+`Permission denied: '/etc/vps-deployer/config.env'`. The config directory must be `root:vps-deployer` mode `750`. Re-download `install.sh` and re-run it, or fix the live VPS:
+
+```bash
+sudo chown root:vps-deployer /etc/vps-deployer
+sudo chmod 750 /etc/vps-deployer
 ```
 
 `failed to open file .../uv.toml: Permission denied`. Re-download `install.sh` and re-run it. The installer now runs `uv` from `/opt/vps-deployer/app`, not from your home directory. Until that release is live, `cd /tmp` first.

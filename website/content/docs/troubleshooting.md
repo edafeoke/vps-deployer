@@ -13,6 +13,15 @@ journalctl -u vps-deployer-app-my-next-app
 
 Installer log: `/var/log/vps-deployer/installer.log`.
 
+## `Permission denied: '/etc/vps-deployer/config.env'`
+
+The config directory must be `root:vps-deployer` mode `750` so the `vps-deployer` user can read `config.env`. Re-download `install.sh` and run it again, or fix the live VPS:
+
+```bash
+sudo chown root:vps-deployer /etc/vps-deployer
+sudo chmod 750 /etc/vps-deployer
+```
+
 ## `failed to open file .../uv.toml`
 
 The installer ran `uv` from your home directory. Re-download `install.sh` from this site and run it again. Until that build is live, `cd /tmp` first:

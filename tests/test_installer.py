@@ -23,3 +23,13 @@ def test_installer_runs_uv_outside_invoker_home() -> None:
     assert "run_uv_as_app_user" in text
     assert "UV_NO_CONFIG=1" in text
     assert "cd /opt/vps-deployer/app" in text
+
+
+def test_installer_config_dir_is_group_readable() -> None:
+    text = (ROOT / "installer" / "install.sh").read_text(encoding="utf-8")
+    assert "chown root:vps-deployer /etc/vps-deployer" in text
+    assert "restore_previous_install" in text
+    assert "snapshot_existing" in text
+    assert "pre-install.staging" in text
+    restore = text.split("restore_previous_install()")[1].split("run_uv_as_app_user")[0]
+    assert "/var/www/apps" not in restore

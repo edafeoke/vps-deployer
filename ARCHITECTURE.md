@@ -100,7 +100,7 @@ Each installation is independent. It manages applications on that VPS only.
     releases/       # Platform release artifacts
     scripts/        # Maintenance scripts
 
-/etc/vps-deployer/
+/etc/vps-deployer/   # root:vps-deployer, mode 750
     config.env      # Environment / secrets (mode 600)
     config.json     # Non-secret settings
     projects/       # Per-project files (later)
@@ -297,7 +297,7 @@ Install CLI, helper, systemd unit
 Start and health-check
 ```
 
-The installer is idempotent. A second run must not delete `/var/www/apps`, `/etc/nginx`, application systemd units, or the SQLite database.
+The installer is idempotent. A second run must not delete `/var/www/apps`, `/etc/nginx`, application systemd units, or the SQLite database. If the new platform files fail health checks, the installer restores the previous platform files. Applications are never rolled back.
 
 Sources, in order:
 

@@ -60,9 +60,15 @@ log() {
   fi
 }
 
+VD_BACKUP=""
+
 fail() {
+  trap - ERR
   echo
   echo "Installation failed."
+  if restore_previous_install; then
+    echo "Previous platform files were restored. Your applications were not changed."
+  fi
   if [[ -n "${VD_LOG:-}" ]]; then
     echo "Log: ${VD_LOG}"
   fi
@@ -313,7 +319,12 @@ create_user_and_dirs() {
   chown -R vps-deployer:vps-deployer /opt/vps-deployer /var/lib/vps-deployer /var/log/vps-deployer
   chown vps-deployer:vps-deployer /var/www/apps
   chmod 755 /var/www/apps /var/www/certbot
+  chown root:vps-deployer /etc/vps-deployer
   chmod 750 /etc/vps-deployer
+  if [[ -d /etc/vps-deployer/projects ]]; then
+    chown root:vps-deployer /etc/vps-deployer/projects
+    chmod 750 /etc/vps-deployer/projects
+  fi
 }
 
 write_config() {
@@ -349,6 +360,60 @@ EOF
   fi
 }
 
+snapshot_existing() {
+  if [[ ! -d /opt/vps-deployer/app/src/vps_deployer ]]; then
+    return 0
+  fi
+  local staging="/opt/vps-deployer/releases/pre-install.staging"
+  local dest="/opt/vps-deployer/releases/pre-install"
+  rm -rf "$staging"
+  mkdir -p "$staging/libexec"
+  rsync -a /opt/vps-deployer/app/ "$staging/app/"
+  if [[ -x /usr/local/bin/vps-deployer ]]; then
+    cp -a /usr/local/bin/vps-deployer "$staging/vps-deployer"
+  fi
+  if [[ -x /usr/local/libexec/vps-deployer-helper ]]; then
+    cp -a /usr/local/libexec/vps-deployer-helper "$staging/libexec/"
+  fi
+  if [[ -f /etc/systemd/system/vps-deployer.service ]]; then
+    cp -a /etc/systemd/system/vps-deployer.service "$staging/vps-deployer.service"
+  fi
+  if [[ -f /etc/sudoers.d/vps-deployer ]]; then
+    cp -a /etc/sudoers.d/vps-deployer "$staging/sudoers"
+  fi
+  rm -rf "$dest"
+  mv "$staging" "$dest"
+  VD_BACKUP="$dest"
+  log "snapshot ${VD_BACKUP}"
+}
+
+restore_previous_install() {
+  if [[ -z "${VD_BACKUP:-}" || ! -d "${VD_BACKUP}/app" ]]; then
+    return 1
+  fi
+  echo "Restoring previous VPS Deployer files..."
+  rsync -a --delete "${VD_BACKUP}/app/" /opt/vps-deployer/app/ || return 1
+  chown -R vps-deployer:vps-deployer /opt/vps-deployer
+  if [[ -f "${VD_BACKUP}/vps-deployer" ]]; then
+    install -m 0755 "${VD_BACKUP}/vps-deployer" /usr/local/bin/vps-deployer
+  fi
+  if [[ -f "${VD_BACKUP}/libexec/vps-deployer-helper" ]]; then
+    install -m 0755 "${VD_BACKUP}/libexec/vps-deployer-helper" /usr/local/libexec/vps-deployer-helper
+  fi
+  if [[ -f "${VD_BACKUP}/vps-deployer.service" ]]; then
+    install -m 0644 "${VD_BACKUP}/vps-deployer.service" /etc/systemd/system/vps-deployer.service
+  fi
+  if [[ -f "${VD_BACKUP}/sudoers" ]]; then
+    install -m 0440 "${VD_BACKUP}/sudoers" /etc/sudoers.d/vps-deployer
+  fi
+  if [[ "$VD_SKIP_SERVICE_START" != "1" ]] && command -v systemctl >/dev/null 2>&1; then
+    systemctl daemon-reload || true
+    systemctl restart vps-deployer.service || true
+  fi
+  log "restored ${VD_BACKUP}"
+  return 0
+}
+
 run_uv_as_app_user() {
   # uv reads uv.toml from the current directory. Do not run it from the
   # invoking user's home (often mode 750), or vps-deployer gets EACCES.
@@ -367,6 +432,7 @@ install_application() {
   echo
   local dest="/opt/vps-deployer/app"
   mkdir -p "$dest"
+  snapshot_existing
 
   rsync -a --delete \
     --exclude '.venv' \
@@ -397,7 +463,7 @@ install_application() {
     if command -v visudo >/dev/null 2>&1 && ! visudo -c -f /etc/sudoers.d/vps-deployer.tmp; then
       rm -f /etc/sudoers.d/vps-deployer.tmp
       echo "sudoers snippet failed validation" >&2
-      exit 1
+      fail
     fi
     mv /etc/sudoers.d/vps-deployer.tmp /etc/sudoers.d/vps-deployer
     chmod 0440 /etc/sudoers.d/vps-deployer
@@ -437,13 +503,13 @@ start_service() {
   else
     vd_mark fail "Service running"
     systemctl status vps-deployer.service --no-pager || true
-    exit 1
+    fail
   fi
   if curl -fsS --max-time 5 http://127.0.0.1:5100/health | grep -q ok; then
     vd_mark ok "API healthy"
   else
     vd_mark fail "API healthy"
-    exit 1
+    fail
   fi
   vd_mark ok "Database healthy"
   vd_mark ok "Deployment engine healthy"

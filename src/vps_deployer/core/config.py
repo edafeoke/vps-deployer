@@ -26,8 +26,22 @@ def find_repo_root(start: Path | None = None) -> Path | None:
     return None
 
 
+def _path_is_dir(path: Path) -> bool:
+    try:
+        return path.is_dir()
+    except OSError:
+        return False
+
+
+def _path_is_file(path: Path) -> bool:
+    try:
+        return path.is_file()
+    except OSError:
+        return False
+
+
 def production_layout_available() -> bool:
-    return PRODUCTION_CONFIG_DIR.is_dir()
+    return _path_is_dir(PRODUCTION_CONFIG_DIR)
 
 
 class Settings(BaseSettings):
@@ -127,12 +141,13 @@ class Settings(BaseSettings):
 def _settings_env_file() -> Path | None:
     if os.environ.get("VPS_DEPLOYER_ENV_FILE"):
         return Path(os.environ["VPS_DEPLOYER_ENV_FILE"])
-    if (PRODUCTION_CONFIG_DIR / "config.env").is_file():
-        return PRODUCTION_CONFIG_DIR / "config.env"
+    production_env = PRODUCTION_CONFIG_DIR / "config.env"
+    if _path_is_file(production_env):
+        return production_env
     repo = find_repo_root()
     if repo is not None:
         local = repo / ".local" / "config.env"
-        if local.is_file():
+        if _path_is_file(local):
             return local
     return None
 

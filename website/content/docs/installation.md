@@ -32,14 +32,14 @@ sudo bash installer/install.sh --source /path/to/vps-deployer
 7. Installs the CLI, privileged helper, sudoers snippet, and systemd unit.
 8. Starts `vps-deployer.service` and checks `/health`.
 
-A second run is safe. It must not delete `/var/www/apps`, nginx site files, application units, or the database.
+A second run is safe. It must not delete `/var/www/apps`, nginx site files, application units, or the database. If the new platform files fail health checks, the installer restores the previous `/opt/vps-deployer/app`, CLI, helper, and systemd unit.
 
 ## Layout
 
 | Path | Purpose |
 | --- | --- |
 | `/opt/vps-deployer` | Installed application |
-| `/etc/vps-deployer` | Config and secrets (mode 600) |
+| `/etc/vps-deployer` | Config directory (`root:vps-deployer` `750`; `config.env` mode `600`) |
 | `/var/lib/vps-deployer` | SQLite database |
 | `/var/log/vps-deployer` | Installer and API logs |
 | `/var/www/apps` | Your applications |
