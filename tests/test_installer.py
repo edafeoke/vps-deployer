@@ -16,3 +16,10 @@ def test_installer_lib() -> None:
     )
     assert result.returncode == 0, result.stdout + result.stderr
     assert "All installer library tests passed." in result.stdout
+
+
+def test_installer_runs_uv_outside_invoker_home() -> None:
+    text = (ROOT / "installer" / "install.sh").read_text(encoding="utf-8")
+    assert "run_uv_as_app_user" in text
+    assert "UV_NO_CONFIG=1" in text
+    assert "cd /opt/vps-deployer/app" in text

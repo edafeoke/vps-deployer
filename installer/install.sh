@@ -349,6 +349,19 @@ EOF
   fi
 }
 
+run_uv_as_app_user() {
+  # uv reads uv.toml from the current directory. Do not run it from the
+  # invoking user's home (often mode 750), or vps-deployer gets EACCES.
+  sudo -u vps-deployer -H env \
+    HOME=/var/lib/vps-deployer \
+    XDG_CACHE_HOME=/var/lib/vps-deployer/.cache \
+    XDG_CONFIG_HOME=/var/lib/vps-deployer/.config \
+    UV_CACHE_DIR=/var/lib/vps-deployer/.cache/uv \
+    UV_PYTHON_INSTALL_DIR=/var/lib/vps-deployer/.local/share/uv/python \
+    UV_NO_CONFIG=1 \
+    /bin/bash -c 'cd /opt/vps-deployer/app && exec "$@"' bash "$@"
+}
+
 install_application() {
   echo "Installing VPS Deployer..."
   echo
@@ -365,16 +378,16 @@ install_application() {
     "${VD_SOURCE}/" "${dest}/"
 
   chown -R vps-deployer:vps-deployer /opt/vps-deployer
-  sudo -u vps-deployer -H /usr/local/bin/uv --version >/dev/null 2>&1 || true
+  mkdir -p /var/lib/vps-deployer/.cache/uv /var/lib/vps-deployer/.config
+  chown -R vps-deployer:vps-deployer /var/lib/vps-deployer
   if [[ ! -x /usr/local/bin/uv ]]; then
     if command -v uv >/dev/null 2>&1; then
       install -m 0755 "$(command -v uv)" /usr/local/bin/uv
     fi
   fi
-  sudo -u vps-deployer -H env HOME=/var/lib/vps-deployer \
-    uv python install 3.12
-  sudo -u vps-deployer -H env HOME=/var/lib/vps-deployer \
-    uv sync --frozen --no-dev --directory "$dest"
+  run_uv_as_app_user uv --version >/dev/null 2>&1 || true
+  run_uv_as_app_user uv python install 3.12
+  run_uv_as_app_user uv sync --frozen --no-dev --directory "$dest"
 
   install -m 0755 "${VD_SOURCE}/packaging/bin/vps-deployer" /usr/local/bin/vps-deployer
   install -m 0755 "${VD_SOURCE}/packaging/helper/vps-deployer-helper" /usr/local/libexec/vps-deployer-helper
@@ -390,10 +403,9 @@ install_application() {
     chmod 0440 /etc/sudoers.d/vps-deployer
   fi
 
-  sudo -u vps-deployer -H env HOME=/var/lib/vps-deployer \
-    uv run --directory "$dest" alembic upgrade head || \
-    sudo -u vps-deployer -H env HOME=/var/lib/vps-deployer \
-      uv run --directory "$dest" python -c "from vps_deployer.db.session import init_db; init_db()"
+  run_uv_as_app_user uv run --directory "$dest" alembic upgrade head || \
+    run_uv_as_app_user uv run --directory "$dest" python -c \
+      "from vps_deployer.db.session import init_db; init_db()"
 
   vd_mark ok "Application"
   vd_mark ok "Configuration"

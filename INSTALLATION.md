@@ -131,6 +131,8 @@ df -h
 free -h
 ```
 
+`failed to open file .../uv.toml: Permission denied`. Re-download `install.sh` and re-run it. The installer now runs `uv` from `/opt/vps-deployer/app`, not from your home directory. Until that release is live, `cd /tmp` first.
+
 Unsupported operating system. Supported systems are Ubuntu 22.04+, Ubuntu 24.04+, and Debian 12+. See <https://vps-deployer.onebitstack.com/docs/requirements>.
 
 ## Uninstall

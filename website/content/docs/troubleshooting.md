@@ -13,6 +13,15 @@ journalctl -u vps-deployer-app-my-next-app
 
 Installer log: `/var/log/vps-deployer/installer.log`.
 
+## `failed to open file .../uv.toml`
+
+The installer ran `uv` from your home directory. Re-download `install.sh` from this site and run it again. Until that build is live, `cd /tmp` first:
+
+```bash
+cd /tmp
+sudo bash /path/to/install.sh
+```
+
 ## The public website is down
 
 Deploy, rollback, logs, and the local dashboard still work. You only need the internet for GitHub, Let's Encrypt, DNS, and downloading updates.
