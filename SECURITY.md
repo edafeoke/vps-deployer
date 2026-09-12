@@ -30,7 +30,7 @@ You do not create a website account to use VPS Deployer.
 
 - `vps-deployer.service` runs as user `vps-deployer`, not root.
 - The API listens on `127.0.0.1:5100`.
-- The local dashboard is the same localhost process. It is not a public website.
+- The dashboard is the same localhost process. Publishing it on a hostname or the VPS IP is opt-in through nginx and requires a password.
 - Dashboard pages must not render private keys, webhook secrets, or environment values.
 - There is no `POST /execute` or arbitrary shell endpoint.
 
@@ -47,6 +47,7 @@ Allowed actions:
 
 - `service-status`
 - `nginx-test`, `nginx-reload`, `nginx-site-check`, `nginx-site-install`, `nginx-site-remove`
+- `dashboard-site-check`, `dashboard-site-install`, `dashboard-site-remove`
 - `ssl-issue`, `ssl-renew`
 - `app-start`, `app-stop`, `app-restart`, `app-status`, `app-enable`, `app-disable`, `app-logs`
 - `app-unit-check`, `app-unit-install`, `app-unit-remove`
@@ -57,13 +58,13 @@ Nginx site files are allowlisted: listen, server_name, root, proxy_pass, proxy h
 
 The `vps-deployer` user may run only `/usr/local/libexec/vps-deployer-helper` via `/etc/sudoers.d/vps-deployer`. That snippet is not `NOPASSWD: ALL`.
 
-Nginx site files must be named `vps-deployer-<project>.conf`. They may listen on ports 80 and 443, use `server_name` values that pass domain validation, `proxy_pass` only to `http://127.0.0.1:33000-33999`, and `root` only under `/var/www/apps/<project>/` or `/var/www/certbot`. TLS files must be `/etc/letsencrypt/live/<hostname>/fullchain.pem` and `privkey.pem`. `include`, `alias`, and shell metacharacters are rejected.
+Nginx site files must be named `vps-deployer-<project>.conf`. They may listen on ports 80 and 443, use `server_name` values that pass domain validation, `proxy_pass` only to `http://127.0.0.1:33000-33999`, and `root` only under `/var/www/apps/<project>/` or `/var/www/certbot`. The optional dashboard site is `vps-deployer.conf` and may `proxy_pass` only to `http://127.0.0.1:5100`. TLS files must be `/etc/letsencrypt/live/<hostname>/fullchain.pem` and `privkey.pem`. `include`, `alias`, and shell metacharacters are rejected.
 
 `ssl-issue` accepts only a validated email and hostnames. It runs `certbot certonly --webroot` with a fixed argv list. Private keys stay on disk under `/etc/letsencrypt/` and are never written to logs or SQLite.
 
 ## Secrets
 
-Store secrets in `/etc/vps-deployer/` with mode `600`.
+Store secrets in `/etc/vps-deployer/` with mode `600` or `640` for the `vps-deployer` group. `config.env` is `640` so the installing admin can run the CLI. GitHub App keys stay `600`.
 
 Never store GitHub private keys, webhook secrets, or tokens in:
 

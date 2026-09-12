@@ -10,6 +10,11 @@ vps-deployer version
 vps-deployer status
 vps-deployer doctor
 vps-deployer dashboard
+vps-deployer dashboard enable --host panel.example.com
+vps-deployer dashboard enable --ip
+vps-deployer dashboard password
+vps-deployer dashboard ssl --email ops@example.com
+vps-deployer dashboard disable
 vps-deployer projects
 vps-deployer project list
 vps-deployer project add my-next-app --repository example/my-next-app

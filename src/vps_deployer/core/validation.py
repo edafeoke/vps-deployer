@@ -63,6 +63,36 @@ def validate_repository(repository: str) -> str:
     return repository
 
 
+IPV4_RE = re.compile(r"^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$")
+
+
+def validate_ipv4(address: str) -> str:
+    candidate = address.strip()
+    match = IPV4_RE.fullmatch(candidate)
+    if not match:
+        raise ValidationError("Invalid IPv4 address")
+    if any(int(part) > 255 for part in match.groups()):
+        raise ValidationError("Invalid IPv4 address")
+    return _reject_unsafe(candidate, "address")
+
+
+def is_ipv4(value: str) -> bool:
+    try:
+        validate_ipv4(value)
+    except ValidationError:
+        return False
+    return True
+
+
+def validate_dashboard_host(value: str) -> str:
+    candidate = value.strip().lower().rstrip(".")
+    if is_ipv4(candidate):
+        if candidate in {"0.0.0.0", "127.0.0.1"}:
+            raise ValidationError("Dashboard IP must be a public address")
+        return candidate
+    return validate_domain(candidate)
+
+
 def validate_domain(domain: str) -> str:
     candidate = domain.strip().lower().rstrip(".")
     if candidate.startswith("*.") or not DOMAIN_RE.fullmatch(candidate):

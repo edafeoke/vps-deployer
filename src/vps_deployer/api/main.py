@@ -2,12 +2,19 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 from typing import Any
+from urllib.parse import quote
 
 from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
 from vps_deployer.core.config import get_settings
+from vps_deployer.core.dashboard_access import (
+    SESSION_COOKIE,
+    requires_dashboard_auth,
+    valid_session_cookie,
+)
 from vps_deployer.core.deployments import (
     DeploymentNotFoundError,
     deployment_payload,
@@ -81,6 +88,21 @@ app = FastAPI(
 )
 app.include_router(dashboard_router)
 mount_dashboard_static(app)
+
+
+@app.middleware("http")
+async def require_public_dashboard_login(request: Request, call_next):
+    settings = get_settings()
+    if not requires_dashboard_auth(request.headers.get("host"), request.url.path, settings):
+        return await call_next(request)
+    if valid_session_cookie(request.cookies.get(SESSION_COOKIE), settings):
+        return await call_next(request)
+    if request.url.path.startswith("/api/"):
+        return JSONResponse({"detail": "Authentication required"}, status_code=401)
+    nxt = request.url.path
+    if request.url.query:
+        nxt = f"{nxt}?{request.url.query}"
+    return RedirectResponse(f"/login?next={quote(nxt, safe='')}", status_code=303)
 
 
 @app.get("/health")

@@ -325,6 +325,10 @@ create_user_and_dirs() {
     chown root:vps-deployer /etc/vps-deployer/projects
     chmod 750 /etc/vps-deployer/projects
   fi
+  if [[ -n "${SUDO_USER:-}" && "${SUDO_USER}" != "root" ]] && getent passwd "$SUDO_USER" >/dev/null; then
+    usermod -aG vps-deployer "$SUDO_USER"
+    log "added ${SUDO_USER} to vps-deployer group"
+  fi
 }
 
 write_config() {
@@ -339,10 +343,12 @@ VPS_DEPLOYER_LOG_DIR=/var/log/vps-deployer
 VPS_DEPLOYER_DATABASE_PATH=/var/lib/vps-deployer/vps-deployer.db
 VPS_DEPLOYER_CREATE_TABLES=true
 EOF
-    chmod 600 /etc/vps-deployer/config.env
-    chown vps-deployer:vps-deployer /etc/vps-deployer/config.env
   else
     log "preserving existing /etc/vps-deployer/config.env"
+  fi
+  if [[ -f /etc/vps-deployer/config.env ]]; then
+    chown vps-deployer:vps-deployer /etc/vps-deployer/config.env
+    chmod 640 /etc/vps-deployer/config.env
   fi
 
   if vd_should_write_file /etc/vps-deployer/config.json; then

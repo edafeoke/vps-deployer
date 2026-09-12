@@ -23,6 +23,19 @@ def test_cli_dashboard(tmp_env) -> None:
     assert "localhost" in result.stdout
 
 
+def test_cli_dashboard_enable(tmp_env) -> None:
+    result = runner.invoke(
+        app,
+        ["dashboard", "enable", "--host", "panel.example.com", "--password", "secretpass"],
+    )
+    assert result.exit_code == 0, result.stdout + result.stderr
+    assert "https://panel.example.com/" not in result.stdout
+    assert "http://panel.example.com/" in result.stdout
+    printed = runner.invoke(app, ["dashboard"])
+    assert printed.exit_code == 0
+    assert "Public dashboard: http://panel.example.com/" in printed.stdout
+
+
 def test_doctor(tmp_env) -> None:
     result = runner.invoke(app, ["doctor"])
     assert "VPS Deployer doctor" in result.stdout

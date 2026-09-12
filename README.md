@@ -84,9 +84,11 @@ vps-deployer rollback my-next-app
 vps-deployer dashboard
 ```
 
-The local dashboard is `http://127.0.0.1:5100/` on that VPS. SSH tunnel if you are not on the machine:
+The dashboard is `http://127.0.0.1:5100/` on that VPS. Publish it on a hostname or the VPS IP (password required), or tunnel:
 
 ```bash
+vps-deployer dashboard enable --host panel.example.com
+vps-deployer dashboard enable --ip
 ssh -L 5100:127.0.0.1:5100 user@your-vps
 ```
 

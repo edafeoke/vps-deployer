@@ -39,7 +39,7 @@ A second run is safe. It must not delete `/var/www/apps`, nginx site files, appl
 | Path | Purpose |
 | --- | --- |
 | `/opt/vps-deployer` | Installed application |
-| `/etc/vps-deployer` | Config directory (`root:vps-deployer` `750`; `config.env` mode `600`) |
+| `/etc/vps-deployer` | Config directory (`root:vps-deployer` `750`; `config.env` mode `640`) |
 | `/var/lib/vps-deployer` | SQLite database |
 | `/var/log/vps-deployer` | Installer and API logs |
 | `/var/www/apps` | Your applications |

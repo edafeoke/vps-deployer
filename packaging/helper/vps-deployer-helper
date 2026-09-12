@@ -23,6 +23,9 @@ Allowed actions:
   nginx-site-check <project>
   nginx-site-install <project>
   nginx-site-remove <project>
+  dashboard-site-check
+  dashboard-site-install
+  dashboard-site-remove
   nginx-reload
   ssl-issue <email> <cert-name> <hostname> [hostname...]
   ssl-renew
@@ -199,6 +202,8 @@ require_nginx() {
   fi
 }
 
+DASHBOARD_SITE="vps-deployer.conf"
+
 nginx_site_name() {
   printf 'vps-deployer-%s.conf' "$1"
 }
@@ -208,6 +213,29 @@ validate_nginx_hostname() {
   if [[ ! "$name" =~ ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$ ]]; then
     reject "invalid server_name"
   fi
+}
+
+validate_ipv4() {
+  local ip="$1"
+  local octet
+  if [[ ! "$ip" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+    return 1
+  fi
+  IFS='.' read -r -a octets <<<"$ip"
+  for octet in "${octets[@]}"; do
+    if ((10#$octet > 255)); then
+      return 1
+    fi
+  done
+  return 0
+}
+
+validate_dashboard_server_name() {
+  local name="$1"
+  if validate_ipv4 "$name"; then
+    return 0
+  fi
+  validate_nginx_hostname "$name"
 }
 
 validate_email() {
@@ -346,11 +374,131 @@ validate_nginx_site() {
   done <<<"$content"
 }
 
+validate_dashboard_nginx_site() {
+  local content="$1"
+  local line stripped rootpath certpath certhost
+
+  if [[ -z "$content" ]]; then
+    reject "empty nginx site"
+  fi
+  if [[ ${#content} -gt 12000 ]]; then
+    reject "nginx site too large"
+  fi
+  if [[ "$content" == *..* ]]; then
+    reject "nginx site contains path traversal"
+  fi
+  if printf '%s' "$content" | grep -qE '`|\$\(|\|'; then
+    reject "nginx site contains unsafe characters"
+  fi
+  if ! grep -qxF "# vps-deployer site: dashboard" <<<"$content"; then
+    reject "missing vps-deployer site marker"
+  fi
+  if grep -qiE '^[[:space:]]*(include|perl|lua|alias)\b' <<<"$content"; then
+    reject "forbidden nginx directive"
+  fi
+  while IFS= read -r line; do
+    if [[ ${#line} -gt 500 ]]; then
+      reject "nginx line too long"
+    fi
+    stripped="${line#"${line%%[![:space:]]*}"}"
+    if [[ -z "$stripped" || "$stripped" == \#* || "$stripped" == "}" || "$stripped" == "server {" ]]; then
+      continue
+    fi
+    if [[ "$stripped" == listen* ]]; then
+      if [[ ! "$stripped" =~ ^listen\ (\[::\]:80|80)\;$ && ! "$stripped" =~ ^listen\ (\[::\]:443|443)\ ssl\;$ ]]; then
+        reject "invalid listen directive"
+      fi
+      continue
+    fi
+    if [[ "$stripped" == server_name* ]]; then
+      names="${stripped#server_name }"
+      names="${names%;}"
+      if [[ -z "$names" ]]; then
+        reject "missing server_name"
+      fi
+      for name in $names; do
+        validate_dashboard_server_name "$name"
+      done
+      continue
+    fi
+    if [[ "$stripped" == root* ]]; then
+      rootpath="${stripped#root }"
+      rootpath="${rootpath%;}"
+      if [[ "$rootpath" != "/var/www/certbot" ]]; then
+        reject "invalid nginx root"
+      fi
+      continue
+    fi
+    if [[ "$stripped" == proxy_pass* ]]; then
+      if [[ "$stripped" != "proxy_pass http://127.0.0.1:5100;" ]]; then
+        reject "invalid proxy_pass"
+      fi
+      continue
+    fi
+    if [[ "$stripped" == ssl_certificate_key* ]]; then
+      certpath="${stripped#ssl_certificate_key }"
+      certpath="${certpath%;}"
+      if [[ ! "$certpath" =~ ^/etc/letsencrypt/live/[a-z0-9.-]+/privkey.pem$ ]]; then
+        reject "invalid certificate path"
+      fi
+      certhost="${certpath#/etc/letsencrypt/live/}"
+      certhost="${certhost%/privkey.pem}"
+      validate_nginx_hostname "$certhost"
+      continue
+    fi
+    if [[ "$stripped" == ssl_certificate* ]]; then
+      certpath="${stripped#ssl_certificate }"
+      certpath="${certpath%;}"
+      if [[ ! "$certpath" =~ ^/etc/letsencrypt/live/[a-z0-9.-]+/fullchain.pem$ ]]; then
+        reject "invalid certificate path"
+      fi
+      certhost="${certpath#/etc/letsencrypt/live/}"
+      certhost="${certhost%/fullchain.pem}"
+      validate_nginx_hostname "$certhost"
+      continue
+    fi
+    if [[ "$stripped" == ssl_protocols* ]]; then
+      if [[ "$stripped" != "ssl_protocols TLSv1.2 TLSv1.3;" ]]; then
+        reject "invalid ssl_protocols"
+      fi
+      continue
+    fi
+    if [[ "$stripped" == return* ]]; then
+      if [[ "$stripped" != 'return 301 https://$host$request_uri;' ]]; then
+        reject "invalid return directive"
+      fi
+      continue
+    fi
+    case "$stripped" in
+      'client_max_body_size 32m;'|'location / {'|'location /.well-known/acme-challenge/ {'|'try_files $uri $uri/ /index.html;'|'proxy_http_version 1.1;')
+        continue
+        ;;
+      'proxy_set_header Host $host;'|'proxy_set_header X-Real-IP $remote_addr;')
+        continue
+        ;;
+      'proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;'|'proxy_set_header X-Forwarded-Proto $scheme;')
+        continue
+        ;;
+      'proxy_set_header Upgrade $http_upgrade;'|'proxy_set_header Connection "upgrade";')
+        continue
+        ;;
+    esac
+    reject "unapproved nginx directive"
+  done <<<"$content"
+}
+
 read_nginx_stdin() {
   local project="$1"
   local content
   content="$(cat)"
   validate_nginx_site "$project" "$content"
+  printf '%s' "$content"
+}
+
+read_dashboard_nginx_stdin() {
+  local content
+  content="$(cat)"
+  validate_dashboard_nginx_site "$content"
   printf '%s' "$content"
 }
 
@@ -364,13 +512,40 @@ reload_nginx() {
   fi
 }
 
-remove_nginx_site_files() {
-  local project="$1"
-  local site
-  site="$(nginx_site_name "$project")"
+remove_named_nginx_site() {
+  local site="$1"
   rm -f -- "/etc/nginx/sites-enabled/${site}"
   rm -f -- "/etc/nginx/sites-available/${site}"
   rm -f -- "/etc/nginx/conf.d/${site}"
+}
+
+remove_nginx_site_files() {
+  local project="$1"
+  remove_named_nginx_site "$(nginx_site_name "$project")"
+}
+
+remove_dashboard_site_files() {
+  remove_named_nginx_site "$DASHBOARD_SITE"
+}
+
+install_named_nginx_site() {
+  local site="$1"
+  local content="$2"
+  local tmp
+  tmp="$(mktemp)"
+  printf '%s\n' "$content" >"$tmp"
+  if [[ -d /etc/nginx/sites-available ]]; then
+    install -m 0644 "$tmp" "/etc/nginx/sites-available/${site}"
+    if [[ -d /etc/nginx/sites-enabled ]]; then
+      ln -sfn "/etc/nginx/sites-available/${site}" "/etc/nginx/sites-enabled/${site}"
+    fi
+  elif [[ -d /etc/nginx/conf.d ]]; then
+    install -m 0644 "$tmp" "/etc/nginx/conf.d/${site}"
+  else
+    rm -f "$tmp"
+    reject "nginx configuration directory is missing"
+  fi
+  rm -f "$tmp"
 }
 
 action="${1:-}"
@@ -405,26 +580,32 @@ case "$action" in
     validate_project_name "$project"
     require_nginx
     content="$(read_nginx_stdin "$project")"
-    site="$(nginx_site_name "$project")"
-    tmp="$(mktemp)"
-    printf '%s\n' "$content" >"$tmp"
-    if [[ -d /etc/nginx/sites-available ]]; then
-      install -m 0644 "$tmp" "/etc/nginx/sites-available/${site}"
-      if [[ -d /etc/nginx/sites-enabled ]]; then
-        ln -sfn "/etc/nginx/sites-available/${site}" "/etc/nginx/sites-enabled/${site}"
-      fi
-    elif [[ -d /etc/nginx/conf.d ]]; then
-      install -m 0644 "$tmp" "/etc/nginx/conf.d/${site}"
-    else
-      rm -f "$tmp"
-      reject "nginx configuration directory is missing"
-    fi
-    rm -f "$tmp"
+    install_named_nginx_site "$(nginx_site_name "$project")" "$content"
     if ! nginx -t >/dev/null 2>&1; then
       remove_nginx_site_files "$project"
       echo "nginx configuration test failed" >&2
       exit 3
     fi
+    reload_nginx
+    ;;
+  dashboard-site-check)
+    read_dashboard_nginx_stdin >/dev/null
+    echo "ok"
+    ;;
+  dashboard-site-install)
+    require_nginx
+    content="$(read_dashboard_nginx_stdin)"
+    install_named_nginx_site "$DASHBOARD_SITE" "$content"
+    if ! nginx -t >/dev/null 2>&1; then
+      remove_dashboard_site_files
+      echo "nginx configuration test failed" >&2
+      exit 3
+    fi
+    reload_nginx
+    ;;
+  dashboard-site-remove)
+    require_nginx
+    remove_dashboard_site_files
     reload_nginx
     ;;
   nginx-site-remove)

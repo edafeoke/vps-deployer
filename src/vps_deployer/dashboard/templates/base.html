@@ -11,7 +11,7 @@
     <div class="grain" aria-hidden="true"></div>
     <header class="mast">
       <div class="brand">
-        <p class="stamp">Local · this VPS only</p>
+        <p class="stamp">{% if page == "login" %}Sign in · this VPS{% else %}This VPS{% endif %}</p>
         <p class="wordmark">VPS Deployer</p>
         <p class="lede">Installation console for the machine you are on.</p>
       </div>
@@ -26,11 +26,13 @@
         </div>
       </dl>
     </header>
+    {% if page != "login" %}
     <nav class="nav" aria-label="Dashboard">
       <a href="/" {% if page == "overview" %}aria-current="page"{% endif %}>Overview</a>
       <a href="/projects" {% if page in ["projects", "project"] %}aria-current="page"{% endif %}>Projects</a>
       <a href="/doctor" {% if page == "doctor" %}aria-current="page"{% endif %}>Doctor</a>
     </nav>
+    {% endif %}
     <main id="main">
       {% if notice %}
       <p class="banner ok" role="status">{{ notice }}</p>

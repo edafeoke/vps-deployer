@@ -4,11 +4,19 @@ from typing import Annotated
 from urllib.parse import quote
 
 from fastapi import APIRouter, FastAPI, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from vps_deployer.core.config import get_settings
+from vps_deployer.core.dashboard_access import (
+    SESSION_COOKIE,
+    DashboardAccessError,
+    authenticate_dashboard,
+    safe_next_path,
+    session_cookie_kwargs,
+    valid_session_cookie,
+)
 from vps_deployer.core.deployments import queue_deployment
 from vps_deployer.core.domains import DomainNotFoundError, add_domain
 from vps_deployer.core.engine import notify_worker
@@ -65,6 +73,53 @@ def _redirect(
 
 def _form_error(exc: Exception) -> str:
     return str(exc)
+
+
+@router.get("/login", response_class=HTMLResponse)
+def dashboard_login_form(
+    request: Request,
+    next: str | None = None,
+    error: str | None = None,
+):
+    destination = safe_next_path(next)
+    if valid_session_cookie(request.cookies.get(SESSION_COOKIE)):
+        return RedirectResponse(destination, status_code=303)
+    context = {
+        **shell_context(error=error),
+        "page": "login",
+        "title": "Sign in",
+        "next": destination,
+    }
+    return _page(request, "login.html", context)
+
+
+@router.post("/login")
+def dashboard_login(
+    request: Request,
+    password: Annotated[str, Form()],
+    next: Annotated[str, Form()] = "/",
+) -> Response:
+    destination = safe_next_path(next)
+    try:
+        token = authenticate_dashboard(password, get_settings())
+    except DashboardAccessError as exc:
+        context = {
+            **shell_context(error=str(exc)),
+            "page": "login",
+            "title": "Sign in",
+            "next": destination,
+        }
+        return _page(request, "login.html", context, status_code=401)
+    response = RedirectResponse(destination, status_code=303)
+    response.set_cookie(SESSION_COOKIE, token, **session_cookie_kwargs())
+    return response
+
+
+@router.post("/logout")
+def dashboard_logout() -> RedirectResponse:
+    response = RedirectResponse("/login", status_code=303)
+    response.delete_cookie(SESSION_COOKIE, path="/")
+    return response
 
 
 @router.get("/", response_class=HTMLResponse)

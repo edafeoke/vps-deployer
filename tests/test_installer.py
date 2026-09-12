@@ -28,6 +28,8 @@ def test_installer_runs_uv_outside_invoker_home() -> None:
 def test_installer_config_dir_is_group_readable() -> None:
     text = (ROOT / "installer" / "install.sh").read_text(encoding="utf-8")
     assert "chown root:vps-deployer /etc/vps-deployer" in text
+    assert "chmod 640 /etc/vps-deployer/config.env" in text
+    assert 'usermod -aG vps-deployer "$SUDO_USER"' in text
     assert "restore_previous_install" in text
     assert "snapshot_existing" in text
     assert "pre-install.staging" in text

@@ -155,9 +155,12 @@ def _settings_env_file() -> Path | None:
 @lru_cache
 def get_settings() -> Settings:
     env_file = _settings_env_file()
-    if env_file is not None:
+    if env_file is None:
+        return Settings()
+    try:
         return Settings(_env_file=env_file, _env_file_encoding="utf-8")
-    return Settings()
+    except OSError:
+        return Settings()
 
 
 def reset_settings() -> None:

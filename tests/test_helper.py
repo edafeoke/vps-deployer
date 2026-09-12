@@ -3,6 +3,7 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
+from vps_deployer.core.dashboard_access import render_dashboard_nginx
 from vps_deployer.core.nginx import render_nginx_site
 from vps_deployer.core.units import render_app_unit
 from vps_deployer.core.validation import APPS_ROOT
@@ -120,6 +121,8 @@ def test_helper_nginx_site_check_rejects_unsafe_proxy_and_root() -> None:
     )
     assert _run("nginx-site-check", "my-next-app", stdin=rewrite).returncode == 2
     assert _run("nginx-site-install", "../etc").returncode == 2
+    port = site.replace("http://127.0.0.1:33101", "http://127.0.0.1:5100")
+    assert _run("nginx-site-check", "my-next-app", stdin=port).returncode == 2
 
 
 def test_helper_nginx_site_check_accepts_https() -> None:
@@ -136,6 +139,17 @@ def test_helper_nginx_site_check_accepts_https() -> None:
     site = render_nginx_site(project, [domain], apps_root=APPS_ROOT)
     result = _run("nginx-site-check", "my-next-app", stdin=site)
     assert result.returncode == 0, result.stderr
+
+
+def test_helper_dashboard_site_check_accepts_hostname_and_ip() -> None:
+    site = render_dashboard_nginx(["panel.example.com", "203.0.113.10"])
+    result = _run("dashboard-site-check", stdin=site)
+    assert result.returncode == 0, result.stderr
+    assert "ok" in result.stdout
+    evil = site.replace("http://127.0.0.1:5100", "http://127.0.0.1:33101")
+    assert _run("dashboard-site-check", stdin=evil).returncode == 2
+    root = site.replace("root /var/www/certbot;", "root /var/www/apps/my-next-app;")
+    assert _run("dashboard-site-check", stdin=root).returncode == 2
 
 
 def test_helper_ssl_issue_rejects_invalid_input() -> None:

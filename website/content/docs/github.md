@@ -21,7 +21,7 @@ vps-deployer github repos
 
 GitHub should POST to this VPS at `/api/github/webhook`. The handler verifies `X-Hub-Signature-256`, matches `owner/name` and branch to a local project, inserts a `QUEUED` deployment, and returns immediately. It does not build or restart applications.
 
-Expose the webhook only as you choose (SSH tunnel, private network, or a reverse proxy you control). The VPS Deployer API still binds to localhost by default.
+Expose the webhook only as you choose (SSH tunnel, private network, or the public dashboard hostname). The VPS Deployer API still binds to localhost. `POST /api/github/webhook` does not use the dashboard login; it still requires HMAC.
 
 ## What this website never does
 

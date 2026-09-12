@@ -101,7 +101,7 @@ Each installation is independent. It manages applications on that VPS only.
     scripts/        # Maintenance scripts
 
 /etc/vps-deployer/   # root:vps-deployer, mode 750
-    config.env      # Environment / secrets (mode 600)
+    config.env      # Environment / secrets (mode 640)
     config.json     # Non-secret settings
     projects/       # Per-project files (later)
 
@@ -168,7 +168,7 @@ The same FastAPI process serves an HTML console on localhost:
 | `/projects/<name>` | Deployments, domains, HTTPS, logs, start/stop/rollback |
 | `/doctor` | Local health checks |
 
-`vps-deployer dashboard` prints `http://127.0.0.1:5100/`. Reach it from another machine only through an SSH tunnel. The pages call the same local services as the CLI. They do not list other VPS instances or send data to the public website. GitHub private keys and webhook secrets are never rendered.
+`vps-deployer dashboard` prints `http://127.0.0.1:5100/` by default. `vps-deployer dashboard enable --host panel.example.com` publishes the same console through nginx on port 80/443. Public requests require a password. The API process still binds to `127.0.0.1:5100`. An SSH tunnel remains optional. The pages do not list other VPS instances or send data to the public website. GitHub private keys and webhook secrets are never rendered.
 
 ## System user
 
@@ -322,6 +322,7 @@ Updating VPS Deployer must not restart or replace your deployed applications.
 ## Security model
 
 - Local API binds to `127.0.0.1`
+- Public dashboard access is nginx plus a password; it is opt-in
 - No arbitrary command execution endpoint
 - Webhook signatures are required
 - Secrets live in `/etc/vps-deployer/` with restrictive permissions

@@ -96,10 +96,12 @@ Expected result: the service is running, the API answers on `127.0.0.1:5100`, an
    ```
 
 3. Add your first project, for example `my-next-app`.
-4. Open the local dashboard on the VPS (`http://127.0.0.1:5100/`), or tunnel to it:
+4. Open the dashboard on the VPS (`http://127.0.0.1:5100/`), publish it, or tunnel to it:
 
    ```bash
    vps-deployer dashboard
+   vps-deployer dashboard enable --host panel.example.com
+   vps-deployer dashboard ssl --email ops@example.com
    ssh -L 5100:127.0.0.1:5100 user@your-vps
    ```
 
@@ -131,12 +133,17 @@ df -h
 free -h
 ```
 
-`Permission denied: '/etc/vps-deployer/config.env'`. The config directory must be `root:vps-deployer` mode `750`. Re-download `install.sh` and re-run it, or fix the live VPS:
+`Permission denied: '/etc/vps-deployer/config.env'`. The service user and the admin who ran the installer must be able to read `config.env`. The directory is `root:vps-deployer` mode `750`; the file is mode `640`. Re-download `install.sh` and re-run it, or fix the live VPS:
 
 ```bash
 sudo chown root:vps-deployer /etc/vps-deployer
 sudo chmod 750 /etc/vps-deployer
+sudo chown vps-deployer:vps-deployer /etc/vps-deployer/config.env
+sudo chmod 640 /etc/vps-deployer/config.env
+sudo usermod -aG vps-deployer "$USER"
 ```
+
+Then start a new SSH session (or run `newgrp vps-deployer`) so the group applies. Until then, `sudo vps-deployer dashboard` works.
 
 `failed to open file .../uv.toml: Permission denied`. Re-download `install.sh` and re-run it. The installer now runs `uv` from `/opt/vps-deployer/app`, not from your home directory. Until that release is live, `cd /tmp` first.
 

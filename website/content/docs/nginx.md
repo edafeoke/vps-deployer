@@ -9,4 +9,4 @@ HTTP (`listen 80`) either proxies a process app to `127.0.0.1:<port>` or serves 
 
 The privileged helper installs the site, runs `nginx -t`, and reloads. A failed test rolls back that site file and leaves other sites untouched.
 
-`include`, `alias`, and shell metacharacters are rejected. `proxy_pass` may only target `127.0.0.1` on ports `33000–33999`. TLS files must be the Let's Encrypt paths for that hostname.
+`include`, `alias`, and shell metacharacters are rejected. Application `proxy_pass` may only target `127.0.0.1` on ports `33000–33999`. The optional dashboard site `vps-deployer.conf` may proxy only to `127.0.0.1:5100`. TLS files must be the Let's Encrypt paths for that hostname.

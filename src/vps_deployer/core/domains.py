@@ -67,6 +67,9 @@ def assert_hostname_available(
     if www and not name.startswith("www."):
         wanted.add(f"www.{name}")
     taken = claimed_hostnames(settings, exclude_project_id=exclude_project_id)
+    from vps_deployer.core.dashboard_access import public_dashboard_hosts
+
+    taken |= public_dashboard_hosts(settings)
     overlap = wanted & taken
     if overlap:
         raise DomainConflictError(f"Domain already in use: {sorted(overlap)[0]}")

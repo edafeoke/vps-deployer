@@ -24,7 +24,7 @@ Point DNS A/AAAA records for `example.com` (and `www` if you used `--www`) at th
 
 ## Local dashboard
 
-The same actions exist at `http://127.0.0.1:5100/projects/my-next-app` on that VPS.
+The same actions exist at `http://127.0.0.1:5100/projects/my-next-app` on that VPS, or on the public dashboard hostname after `vps-deployer dashboard enable`.
 
 ## Remove a project record
 

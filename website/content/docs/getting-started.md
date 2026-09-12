@@ -29,21 +29,23 @@ vps-deployer status
 vps-deployer doctor
 ```
 
-The API listens on `127.0.0.1:5100`. It is not public.
+The API listens on `127.0.0.1:5100`. It is not bound to the public internet.
 
-## 3. Open the local dashboard
+## 3. Open the dashboard
 
 ```bash
 vps-deployer dashboard
+vps-deployer dashboard enable --host panel.example.com
+vps-deployer dashboard ssl --email ops@example.com
 ```
 
-From another computer, tunnel to that VPS:
+`enable` publishes the same console through nginx. Public requests require a password. `--ip` uses the VPS public IPv4 address (HTTP only). An SSH tunnel is still optional:
 
 ```bash
 ssh -L 5100:127.0.0.1:5100 user@your-vps
 ```
 
-Then open `http://127.0.0.1:5100/`. That page manages only the machine you installed on.
+That page manages only the machine you installed on.
 
 ## 4. Configure GitHub and add a project
 

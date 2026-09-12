@@ -10,7 +10,17 @@ from rich.table import Table
 
 from vps_deployer.cli.client import ApiRequestError, ApiUnavailableError, api_get, api_request
 from vps_deployer.core.config import get_settings
+from vps_deployer.core.dashboard_access import (
+    DashboardAccessError,
+    dashboard_public_url,
+    detect_public_ipv4,
+    disable_dashboard_access,
+    enable_dashboard_access,
+    enable_dashboard_ssl,
+    set_dashboard_password,
+)
 from vps_deployer.core.doctor import CheckResult, doctor_payload, run_doctor
+from vps_deployer.core.domains import DomainConflictError
 from vps_deployer.core.github import (
     GitHubAuthError,
     GitHubNotConfiguredError,
@@ -18,6 +28,9 @@ from vps_deployer.core.github import (
     github_status,
     list_accessible_repositories,
 )
+from vps_deployer.core.nginx import NginxError
+from vps_deployer.core.ssl import SslError
+from vps_deployer.core.validation import ValidationError
 from vps_deployer.core.version import get_version
 
 app = typer.Typer(
@@ -29,10 +42,15 @@ project_app = typer.Typer(help="Manage projects on this VPS.")
 github_app = typer.Typer(help="Configure the GitHub App for this VPS.")
 domain_app = typer.Typer(help="Attach domains on this VPS.")
 ssl_app = typer.Typer(help="Enable HTTPS on this VPS.")
+dashboard_app = typer.Typer(
+    help="Open or publish the dashboard for this VPS.",
+    invoke_without_command=True,
+)
 app.add_typer(project_app, name="project")
 app.add_typer(github_app, name="github")
 app.add_typer(domain_app, name="domain")
 app.add_typer(ssl_app, name="ssl")
+app.add_typer(dashboard_app, name="dashboard")
 
 console = Console()
 error_console = Console(stderr=True)
@@ -63,10 +81,106 @@ def status() -> None:
         console.print(f"Database: healthy={database.get('healthy')} path={database.get('path')}")
 
 
-@app.command()
-def dashboard() -> None:
-    """Print the local dashboard URL for this VPS."""
+@dashboard_app.callback(invoke_without_command=True)
+def dashboard(ctx: typer.Context) -> None:
+    """Print the dashboard URL for this VPS."""
+    if ctx.invoked_subcommand is not None:
+        return
+    _print_dashboard_url()
+
+
+@dashboard_app.command("enable")
+def dashboard_enable(
+    host: list[str] | None = typer.Option(
+        None,
+        "--host",
+        help="Public hostname, for example panel.example.com",
+    ),
+    use_ip: bool = typer.Option(False, "--ip", help="Also publish on the VPS public IPv4 address"),
+    password: str | None = typer.Option(
+        None,
+        "--password",
+        help="Dashboard password. Generated once if omitted and none is stored.",
+    ),
+) -> None:
+    """Publish the dashboard on a hostname and/or the VPS public IP."""
+    hosts = list(host or [])
+    if use_ip:
+        try:
+            hosts.append(detect_public_ipv4())
+        except DashboardAccessError as exc:
+            error_console.print(str(exc))
+            raise typer.Exit(code=1) from exc
+    if not hosts:
+        error_console.print("Provide --host and/or --ip.")
+        raise typer.Exit(code=1)
+    try:
+        payload = enable_dashboard_access(hosts=hosts, password=password, settings=get_settings())
+    except (DashboardAccessError, DomainConflictError, NginxError, ValidationError) as exc:
+        error_console.print(str(exc))
+        raise typer.Exit(code=1) from exc
+    url = payload.get("url")
+    console.print(f"Public dashboard: {url}")
+    published = payload.get("hosts")
+    if isinstance(published, list):
+        console.print("hosts: " + ", ".join(str(item) for item in published))
+    generated = payload.get("password")
+    if isinstance(generated, str) and generated:
+        console.print(f"Generated password (shown once): {generated}")
+    console.print("The API still binds to 127.0.0.1:5100.")
+
+
+@dashboard_app.command("disable")
+def dashboard_disable() -> None:
+    """Stop publishing the dashboard on the public hostname or IP."""
+    try:
+        disable_dashboard_access(get_settings())
+    except NginxError as exc:
+        error_console.print(str(exc))
+        raise typer.Exit(code=1) from exc
+    console.print("Public dashboard disabled.")
+    _print_dashboard_url()
+
+
+@dashboard_app.command("password")
+def dashboard_password_cmd(
+    password: str | None = typer.Option(None, "--password", help="New dashboard password"),
+) -> None:
+    """Set or replace the public dashboard password."""
+    value = password or typer.prompt(
+        "Dashboard password",
+        hide_input=True,
+        confirmation_prompt=True,
+    )
+    try:
+        set_dashboard_password(value, get_settings())
+    except DashboardAccessError as exc:
+        error_console.print(str(exc))
+        raise typer.Exit(code=1) from exc
+    console.print("Dashboard password updated.")
+
+
+@dashboard_app.command("ssl")
+def dashboard_ssl(
+    email: str | None = typer.Option(None, "--email", help="Let's Encrypt notice address"),
+) -> None:
+    """Issue a certificate for the public dashboard hostname."""
+    try:
+        payload = enable_dashboard_ssl(email, get_settings())
+    except (DashboardAccessError, SslError, NginxError, ValidationError) as exc:
+        error_console.print(str(exc))
+        raise typer.Exit(code=1) from exc
+    console.print(f"HTTPS enabled: {payload.get('url')}")
+    console.print(f"certificate: {payload.get('certificate')}")
+
+
+def _print_dashboard_url() -> None:
     settings = get_settings()
+    public = dashboard_public_url(settings)
+    if public:
+        console.print(f"Public dashboard: {public}")
+        console.print(f"Local dashboard: {settings.api_base_url}/")
+        return
     console.print(f"Local dashboard: {settings.api_base_url}/")
     console.print("This page is only available on this VPS (localhost).")
 

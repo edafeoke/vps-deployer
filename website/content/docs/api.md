@@ -3,7 +3,7 @@ title: API
 summary: Localhost JSON API and HTML dashboard.
 ---
 
-The API binds to `127.0.0.1:5100`. It is not a public control plane.
+The API binds to `127.0.0.1:5100`. Nginx may proxy a hostname or the VPS IP to that address after `vps-deployer dashboard enable`. Public requests require a password. `/health` and `POST /api/github/webhook` stay reachable without the dashboard login.
 
 Interactive docs on the VPS: `http://127.0.0.1:5100/docs`.
 
@@ -11,7 +11,8 @@ Interactive docs on the VPS: `http://127.0.0.1:5100/docs`.
 
 | Path | Purpose |
 | --- | --- |
-| `GET /` | Local dashboard overview |
+| `GET /` | Dashboard overview |
+| `GET /login` | Public dashboard sign-in |
 | `GET /projects` | Projects |
 | `GET /projects/{name}` | One project |
 | `GET /doctor` | Doctor |
