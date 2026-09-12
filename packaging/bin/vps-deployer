@@ -1,0 +1,2 @@
+#!/bin/sh
+exec /opt/vps-deployer/app/.venv/bin/vps-deployer "$@"

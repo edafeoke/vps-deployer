@@ -1,0 +1,126 @@
+# Installation
+
+This guide takes a fresh Ubuntu or Debian VPS to a running VPS Deployer installation.
+
+You do not need an account on the VPS Deployer website.
+
+## Prerequisites
+
+Supported operating systems:
+
+- Ubuntu 22.04 LTS or newer
+- Ubuntu 24.04 LTS or newer
+- Debian 12 or newer
+
+Recommended minimum hardware:
+
+- 2 CPU cores
+- 2 GB RAM
+- 10 GB free disk
+- amd64 or arm64
+- Root or sudo access
+- Public IPv4 or IPv6 and internet access
+
+Prepare your VPS:
+
+1. Create or rent a VPS on a supported OS.
+2. SSH in as a sudo-capable user.
+3. Apply pending OS updates if you want a clean baseline.
+4. Confirm you can reach the internet from the VPS.
+
+## Quick install
+
+```bash
+curl -fsSL https://vps-deployer.onebitstack.com/install.sh | sudo bash
+```
+
+Optional version pin:
+
+```bash
+curl -fsSL https://vps-deployer.onebitstack.com/install.sh | sudo bash -s -- --version 0.1.0
+```
+
+## Review before installation
+
+Because the installer runs as root, inspect it first:
+
+```bash
+curl -fsSL https://vps-deployer.onebitstack.com/install.sh -o install.sh
+less install.sh
+sudo bash install.sh
+```
+
+Debug output:
+
+```bash
+sudo bash install.sh --debug
+```
+
+Install from a local checkout (development):
+
+```bash
+sudo bash installer/install.sh --source /path/to/vps-deployer
+```
+
+## What the installer does
+
+1. Detects root/sudo, OS, architecture, CPU, RAM, disk, and internet.
+2. Rejects unsupported systems.
+3. Installs git, Python, uv, and nginx.
+4. Creates the `vps-deployer` system user.
+5. Creates `/opt/vps-deployer`, `/etc/vps-deployer`, `/var/lib/vps-deployer`, and `/var/log/vps-deployer`.
+6. Installs the application, CLI, privileged helper, and systemd unit.
+7. Initializes the SQLite database if it does not already exist.
+8. Starts `vps-deployer.service` and checks `/health`.
+
+The installer is idempotent. Running it again preserves configuration, the database, your applications, nginx site files, and application systemd units.
+
+## Verify
+
+```bash
+vps-deployer version
+vps-deployer status
+vps-deployer doctor
+```
+
+Expected result: the service is running, the API answers on `127.0.0.1:5100`, and doctor reports PASS for the platform checks. Missing Node.js or an unconfigured GitHub App is a WARN, not a failed install.
+
+## Next steps
+
+1. Read the getting-started docs: <https://vps-deployer.onebitstack.com/docs/getting-started>
+2. Create a GitHub App, then:
+
+   ```bash
+   vps-deployer github configure --app-id <id> --key-file ./github-app.pem --webhook-secret '<secret>'
+   vps-deployer github repos
+   ```
+
+3. Add your first project, for example `my-next-app`.
+4. Deploy, attach `example.com`, and enable HTTPS.
+
+## Troubleshooting
+
+Installation failed.
+
+Log:
+
+```text
+/var/log/vps-deployer/installer.log
+```
+
+Useful commands:
+
+```bash
+vps-deployer doctor
+systemctl status vps-deployer
+journalctl -u vps-deployer
+ss -ltnp
+df -h
+free -h
+```
+
+Unsupported operating system. Supported systems are Ubuntu 22.04+, Ubuntu 24.04+, and Debian 12+. See <https://vps-deployer.onebitstack.com/docs/requirements>.
+
+## Uninstall
+
+Uninstall is a later phase. The intended default is to remove VPS Deployer itself and keep your applications, nginx sites, certificates, and application data unless you pass an explicit `--purge`.

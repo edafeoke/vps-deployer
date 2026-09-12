@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+# Restricted privileged helper for VPS Deployer.
+# Whitelist only. Do not interpolate untrusted input into a shell.
+set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+Usage: vps-deployer-helper <action> [args]
+
+Allowed actions:
+  service-status <unit>
+  nginx-test
+EOF
+}
+
+reject() {
+  echo "rejected: $1" >&2
+  exit 2
+}
+
+validate_service_name() {
+  local name="${1:-}"
+  if [[ -z "$name" ]]; then
+    reject "missing service name"
+  fi
+  if [[ "$name" == *..* ]]; then
+    reject "invalid service name"
+  fi
+  if [[ ! "$name" =~ ^[a-zA-Z0-9][a-zA-Z0-9._@:-]*$ ]]; then
+    reject "invalid service name"
+  fi
+}
+
+action="${1:-}"
+if [[ -z "$action" ]]; then
+  usage
+  exit 1
+fi
+
+case "$action" in
+  service-status)
+    unit="${2:-}"
+    validate_service_name "$unit"
+    if ! command -v systemctl >/dev/null 2>&1; then
+      echo "systemctl is not available" >&2
+      exit 4
+    fi
+    systemctl is-active -- "$unit" || true
+    systemctl status --no-pager -- "$unit" || true
+    ;;
+  nginx-test)
+    if ! command -v nginx >/dev/null 2>&1; then
+      echo "nginx is not installed" >&2
+      exit 4
+    fi
+    nginx -t
+    ;;
+  *)
+    reject "unknown action"
+    ;;
+esac
