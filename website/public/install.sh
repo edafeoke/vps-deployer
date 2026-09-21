@@ -164,7 +164,7 @@ resolve_source() {
     version="$(printf '%s' "$version" | tr -d '[:space:]')"
   fi
   if [[ -z "$version" ]]; then
-    version="0.3.3"
+    version="0.3.4"
   fi
   if ! vd_validate_semver "$version"; then
     echo "Invalid version: ${version}" >&2
@@ -357,6 +357,17 @@ create_user_and_dirs() {
     chown root:vps-deployer /etc/vps-deployer/projects
     chmod 770 /etc/vps-deployer/projects
   fi
+  local github_file
+  for github_file in \
+    /etc/vps-deployer/github-app.pem \
+    /etc/vps-deployer/github-webhook-secret \
+    /etc/vps-deployer/github.json \
+    /etc/vps-deployer/github-manifest-state.json; do
+    if [[ -f "$github_file" ]]; then
+      chown vps-deployer:vps-deployer "$github_file"
+      chmod 600 "$github_file"
+    fi
+  done
   if [[ -n "${SUDO_USER:-}" && "${SUDO_USER}" != "root" ]] && getent passwd "$SUDO_USER" >/dev/null; then
     usermod -aG vps-deployer "$SUDO_USER"
     log "added ${SUDO_USER} to vps-deployer group"

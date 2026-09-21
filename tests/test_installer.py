@@ -34,6 +34,10 @@ def test_installer_config_dir_is_group_readable() -> None:
     assert "restore_previous_install" in text
     assert "snapshot_existing" in text
     assert "pre-install.staging" in text
+    assert "github-app.pem" in text
+    assert "github-webhook-secret" in text
+    assert 'chown vps-deployer:vps-deployer "$github_file"' in text
+    assert 'chmod 600 "$github_file"' in text
     restore = text.split("restore_previous_install()")[1].split("run_uv_as_app_user")[0]
     assert "/var/www/apps" not in restore
 

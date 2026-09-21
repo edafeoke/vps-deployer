@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from fastapi.testclient import TestClient
 
 from conftest import make_github_pem
@@ -160,3 +162,24 @@ def test_dashboard_hides_github_secrets(client: TestClient, tmp_env) -> None:
     assert secret not in page.text
     assert "BEGIN" not in page.text
     assert "PRIVATE KEY" not in page.text
+
+
+def test_dashboard_reports_unreadable_github_credentials(
+    client: TestClient, tmp_env, monkeypatch
+) -> None:
+    configure_github(
+        app_id="12345",
+        private_key=make_github_pem(),
+        webhook_secret="supersecret-webhook",
+    )
+    original = Path.read_text
+
+    def denied(path: Path, *args, **kwargs):
+        if path.name == "github.json":
+            raise PermissionError("denied")
+        return original(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", denied)
+    page = client.get("/settings")
+    assert page.status_code == 200
+    assert "not readable" in page.text

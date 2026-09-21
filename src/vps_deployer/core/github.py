@@ -3,6 +3,8 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import os
+import pwd
 import secrets
 import time
 from dataclasses import dataclass
@@ -14,7 +16,7 @@ import httpx
 import jwt
 from sqlmodel import Session, select
 
-from vps_deployer.core.config import Settings, get_settings
+from vps_deployer.core.config import PRODUCTION_CONFIG_DIR, Settings, get_settings
 from vps_deployer.db.models import GitHubInstallation
 from vps_deployer.db.session import get_engine, init_db
 
@@ -27,6 +29,7 @@ META_NAME = "github.json"
 MANIFEST_STATE_NAME = "github-manifest-state.json"
 WEBHOOK_PATH = "/api/github/webhook"
 MANIFEST_STATE_TTL_SECONDS = 10 * 60
+SERVICE_USER = "vps-deployer"
 
 
 class GitHubNotConfiguredError(RuntimeError):
@@ -67,9 +70,36 @@ def _config_dir(settings: Settings | None = None) -> Path:
     return current.config_dir
 
 
-def _write_secret_file(path: Path, content: str) -> None:
-    path.write_text(content, encoding="utf-8")
+def _service_identity(settings: Settings) -> tuple[int, int] | None:
+    if settings.config_dir != PRODUCTION_CONFIG_DIR:
+        return None
+    try:
+        account = pwd.getpwnam(SERVICE_USER)
+    except KeyError as exc:
+        raise ValueError(f"Service user {SERVICE_USER} does not exist") from exc
+    return account.pw_uid, account.pw_gid
+
+
+def _require_secure_writer(settings: Settings) -> tuple[int, int] | None:
+    identity = _service_identity(settings)
+    if identity is not None and os.geteuid() not in {0, identity[0]}:
+        raise ValueError("Run GitHub App configuration with sudo on a production install")
+    return identity
+
+
+def _secure_secret_file(path: Path, identity: tuple[int, int] | None) -> None:
     path.chmod(0o600)
+    if identity is not None and os.geteuid() == 0:
+        os.chown(path, *identity)
+
+
+def _write_secret_file(
+    path: Path,
+    content: str,
+    identity: tuple[int, int] | None,
+) -> None:
+    path.write_text(content, encoding="utf-8")
+    _secure_secret_file(path, identity)
 
 
 def github_webhook_url(settings: Settings | None = None) -> str | None:
@@ -99,7 +129,14 @@ def load_github_settings(settings: Settings | None = None) -> GitHubSettings:
     key, secret, meta = github_paths(settings)
     if not key.is_file() or not secret.is_file() or not meta.is_file():
         raise GitHubNotConfiguredError("GitHub App is not configured on this VPS")
-    payload = json.loads(meta.read_text(encoding="utf-8"))
+    try:
+        payload = json.loads(meta.read_text(encoding="utf-8"))
+    except PermissionError as exc:
+        raise GitHubAuthError(
+            "GitHub App credentials are not readable by the vps-deployer service"
+        ) from exc
+    except (OSError, json.JSONDecodeError) as exc:
+        raise GitHubNotConfiguredError("GitHub App metadata is invalid") from exc
     app_id = str(payload.get("app_id") or "").strip()
     installation_id = payload.get("installation_id")
     installation = str(installation_id).strip() if installation_id else None
@@ -115,14 +152,20 @@ def load_github_settings(settings: Settings | None = None) -> GitHubSettings:
 
 def read_webhook_secret(settings: Settings | None = None) -> str:
     configured = load_github_settings(settings)
-    secret = configured.webhook_secret_path.read_text(encoding="utf-8").strip()
+    try:
+        secret = configured.webhook_secret_path.read_text(encoding="utf-8").strip()
+    except OSError as exc:
+        raise GitHubAuthError("GitHub webhook secret is not readable") from exc
     if not secret:
         raise GitHubNotConfiguredError("GitHub webhook secret is empty")
     return secret
 
 
 def _read_private_key(path: Path) -> str:
-    pem = path.read_text(encoding="utf-8")
+    try:
+        pem = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise GitHubAuthError("GitHub private key is not readable") from exc
     if "PRIVATE KEY" not in pem:
         raise GitHubAuthError("GitHub private key file is not a PEM private key")
     return pem
@@ -135,6 +178,7 @@ def configure_github(
     installation_id: str | None = None,
     settings: Settings | None = None,
 ) -> GitHubSettings:
+    current = settings or get_settings()
     app_id = app_id.strip()
     webhook_secret = webhook_secret.strip()
     installation = installation_id.strip() if installation_id else None
@@ -145,25 +189,28 @@ def configure_github(
     if "PRIVATE KEY" not in private_key:
         raise ValueError("Private key must be a PEM private key")
 
-    key_path, secret_path, meta_path = github_paths(settings)
+    identity = _require_secure_writer(current)
+    key_path, secret_path, meta_path = github_paths(current)
     try:
         _write_secret_file(
-            key_path, private_key if private_key.endswith("\n") else private_key + "\n"
+            key_path,
+            private_key if private_key.endswith("\n") else private_key + "\n",
+            identity,
         )
-        _write_secret_file(secret_path, webhook_secret + "\n")
+        _write_secret_file(secret_path, webhook_secret + "\n", identity)
         meta_path.write_text(
             json.dumps({"app_id": app_id, "installation_id": installation}, indent=2) + "\n",
             encoding="utf-8",
         )
-        meta_path.chmod(0o600)
+        _secure_secret_file(meta_path, identity)
     except OSError as exc:
         directory = key_path.parent
         raise ValueError(
             f"Cannot write GitHub App files under {directory}. "
             "If this is a production install, run: sudo chmod 770 /etc/vps-deployer"
         ) from exc
-    _record_installation(app_id, installation, settings)
-    return load_github_settings(settings)
+    _record_installation(app_id, installation, current)
+    return load_github_settings(current)
 
 
 def set_github_installation(
@@ -412,7 +459,19 @@ def github_status(settings: Settings | None = None, probe: bool = True) -> dict[
             "app_name": None,
             "error": "GitHub App is not configured",
         }
-    configured = load_github_settings(settings)
+    try:
+        configured = load_github_settings(settings)
+    except (GitHubAuthError, GitHubNotConfiguredError) as exc:
+        return {
+            "configured": True,
+            "authenticated": False,
+            "app_id": None,
+            "installation_id": None,
+            "webhook_path": WEBHOOK_PATH,
+            "webhook_url": webhook_url,
+            "app_name": None,
+            "error": str(exc),
+        }
     status: dict[str, Any] = {
         "configured": True,
         "authenticated": False,

@@ -4,6 +4,7 @@ import hashlib
 import hmac
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import jwt
 from fastapi.testclient import TestClient
@@ -54,6 +55,49 @@ def test_configure_writes_restricted_files(tmp_env: Path) -> None:
     assert status["webhook_path"] == "/api/github/webhook"
     assert status["webhook_url"] is None
     assert "supersecret" not in json.dumps(status)
+
+
+def test_root_configuration_assigns_files_to_service_user(tmp_env: Path, monkeypatch) -> None:
+    from vps_deployer.core.config import get_settings
+
+    settings = get_settings()
+    assert settings.config_dir is not None
+    monkeypatch.setattr("vps_deployer.core.github.PRODUCTION_CONFIG_DIR", settings.config_dir)
+    monkeypatch.setattr(
+        "vps_deployer.core.github.pwd.getpwnam",
+        lambda _name: SimpleNamespace(pw_uid=123, pw_gid=456),
+    )
+    monkeypatch.setattr("vps_deployer.core.github.os.geteuid", lambda: 0)
+    ownership: list[tuple[Path, int, int]] = []
+    monkeypatch.setattr(
+        "vps_deployer.core.github.os.chown",
+        lambda path, uid, gid: ownership.append((Path(path), uid, gid)),
+    )
+
+    _configure(tmp_env)
+
+    assert {path.name for path, _, _ in ownership} == {
+        "github-app.pem",
+        "github-webhook-secret",
+        "github.json",
+    }
+    assert all((uid, gid) == (123, 456) for _, uid, gid in ownership)
+
+
+def test_github_status_reports_unreadable_metadata(tmp_env: Path, monkeypatch) -> None:
+    _configure(tmp_env)
+    original = Path.read_text
+
+    def denied(path: Path, *args, **kwargs):
+        if path.name == "github.json":
+            raise PermissionError("denied")
+        return original(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", denied)
+    status = github_status(probe=False)
+    assert status["configured"] is True
+    assert status["authenticated"] is False
+    assert "not readable" in str(status["error"])
 
 
 def test_github_status_webhook_url_from_published_host(tmp_env: Path) -> None:

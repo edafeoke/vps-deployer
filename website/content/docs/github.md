@@ -27,6 +27,14 @@ The service user must be able to create those files. Production `/etc/vps-deploy
 
 ```bash
 sudo chmod 770 /etc/vps-deployer
+sudo chown vps-deployer:vps-deployer \
+  /etc/vps-deployer/github-app.pem \
+  /etc/vps-deployer/github-webhook-secret \
+  /etc/vps-deployer/github.json
+sudo chmod 600 \
+  /etc/vps-deployer/github-app.pem \
+  /etc/vps-deployer/github-webhook-secret \
+  /etc/vps-deployer/github.json
 ```
 
 CLI is still available:
@@ -39,6 +47,11 @@ vps-deployer github repos
 
 `github status` prints `webhook_path` and `webhook_url` (the full URL after you publish a dashboard host).
 The manual credential form remains available under **Manual GitHub App setup**.
+
+Creating credentials is not the same as installing the App. In GitHub, open the App's
+**Install App** page, choose the account or organization, and grant access to the
+repositories you deploy. `vps-deployer github repos` reports
+`No GitHub App installations found` until that step is complete.
 
 ## Webhook
 

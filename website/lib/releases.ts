@@ -7,6 +7,13 @@ export type Release = {
 
 export const releases: Release[] = [
   {
+    version: "0.3.4",
+    date: "2026-09-21",
+    title: "GitHub credential ownership",
+    summary:
+      "Make production GitHub credentials readable by the service, repair existing root-owned files during updates, and show credential errors without crashing the dashboard.",
+  },
+  {
     version: "0.3.3",
     date: "2026-09-21",
     title: "Update-site correction",
