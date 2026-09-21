@@ -58,6 +58,10 @@ Nginx site files are allowlisted: listen, server_name, root, proxy_pass, proxy h
 
 The `vps-deployer` user may run only `/usr/local/libexec/vps-deployer-helper` via `/etc/sudoers.d/vps-deployer`. That snippet is not `NOPASSWD: ALL`.
 
+The platform service must be allowed to execute that setuid `sudo` path, so its unit
+does not set `NoNewPrivileges`. Application units do set `NoNewPrivileges=true` and
+cannot invoke the helper.
+
 Nginx site files must be named `vps-deployer-<project>.conf`. They may listen on ports 80 and 443, use `server_name` values that pass domain validation, `proxy_pass` only to `http://127.0.0.1:33000-33999`, and `root` only under `/var/www/apps/<project>/` or `/var/www/certbot`. The optional dashboard site is `vps-deployer.conf` and may `proxy_pass` only to `http://127.0.0.1:5100`. TLS files must be `/etc/letsencrypt/live/<hostname>/fullchain.pem` and `privkey.pem`. `include`, `alias`, and shell metacharacters are rejected.
 
 `ssl-issue` accepts only a validated email and hostnames. It runs `certbot certonly --webroot` with a fixed argv list. Private keys stay on disk under `/etc/letsencrypt/` and are never written to logs or SQLite.

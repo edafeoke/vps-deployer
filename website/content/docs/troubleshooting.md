@@ -13,6 +13,20 @@ journalctl -u vps-deployer-app-my-next-app
 
 Installer log: `/var/log/vps-deployer/installer.log`.
 
+## `The "no new privileges" flag is set`
+
+Versions before 0.3.5 applied `NoNewPrivileges=true` to the platform service even
+though privileged systemd, nginx, and certificate operations use its restricted sudo
+helper. Update VPS Deployer and verify the platform unit:
+
+```bash
+sudo vps-deployer update
+systemctl show vps-deployer -p NoNewPrivileges
+```
+
+The result should be `NoNewPrivileges=no`. Application units continue to use
+`NoNewPrivileges=true`.
+
 ## `repository ... no longer has a Release file`
 
 APT stops when any configured Ubuntu or third-party repository is invalid, even when

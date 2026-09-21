@@ -25,6 +25,18 @@ def test_installer_runs_uv_outside_invoker_home() -> None:
     assert "cd /opt/vps-deployer/app" in text
 
 
+def test_platform_service_can_invoke_restricted_sudo_helper() -> None:
+    platform = (ROOT / "packaging" / "systemd" / "vps-deployer.service").read_text(
+        encoding="utf-8"
+    )
+    app_units = (ROOT / "src" / "vps_deployer" / "core" / "units.py").read_text(
+        encoding="utf-8"
+    )
+    assert "NoNewPrivileges=true" not in platform
+    assert "PrivateTmp=true" in platform
+    assert '"NoNewPrivileges=true\\n"' in app_units
+
+
 def test_installer_config_dir_is_group_readable() -> None:
     text = (ROOT / "installer" / "install.sh").read_text(encoding="utf-8")
     assert "chown root:vps-deployer /etc/vps-deployer" in text

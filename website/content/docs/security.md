@@ -8,6 +8,8 @@ summary: Localhost API, a whitelist helper, and no telemetry.
 - The FastAPI process does not run as root.
 - Privileged work goes through `/usr/local/libexec/vps-deployer-helper` only.
 - sudoers allows that helper, not `NOPASSWD: ALL`.
+- The platform unit permits that restricted sudo path; deployed application units use
+  `NoNewPrivileges=true` and cannot invoke it.
 - Webhooks require `X-Hub-Signature-256`.
 - Project names, domains, ports, and paths are validated.
 - Application paths cannot escape the apps root.

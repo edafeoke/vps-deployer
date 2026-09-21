@@ -11,7 +11,6 @@ EnvironmentFile=/etc/vps-deployer/config.env
 ExecStart=/opt/vps-deployer/app/.venv/bin/uvicorn vps_deployer.api.main:app --host 127.0.0.1 --port 5100
 Restart=always
 RestartSec=5
-NoNewPrivileges=true
 PrivateTmp=true
 
 [Install]

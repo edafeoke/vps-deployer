@@ -7,6 +7,13 @@ export type Release = {
 
 export const releases: Release[] = [
   {
+    version: "0.3.5",
+    date: "2026-09-21",
+    title: "Privileged helper execution",
+    summary:
+      "Allow the platform service to invoke its tightly restricted sudo helper while keeping NoNewPrivileges enabled for deployed application units.",
+  },
+  {
     version: "0.3.4",
     date: "2026-09-21",
     title: "GitHub credential ownership",
