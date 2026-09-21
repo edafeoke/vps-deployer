@@ -31,3 +31,8 @@ if (refreshRoot instanceof HTMLElement) {
     }, seconds * 1000);
   }
 }
+
+const autoSubmitForm = document.querySelector("form[data-auto-submit]");
+if (autoSubmitForm instanceof HTMLFormElement) {
+  autoSubmitForm.submit();
+}

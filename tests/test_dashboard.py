@@ -85,8 +85,38 @@ def test_dashboard_settings_page(client: TestClient) -> None:
     assert "Settings" in response.text
     assert "GitHub App" in response.text
     assert "/api/github/webhook" in response.text
-    assert "enable a public host first" in response.text
+    assert "Publish this dashboard on a hostname first" in response.text
     assert "github.com/settings/apps/new" in response.text
+
+
+def test_dashboard_starts_github_manifest(client: TestClient, tmp_env) -> None:
+    from vps_deployer.core.config import get_settings
+    from vps_deployer.core.dashboard_access import enable_dashboard_access
+
+    enable_dashboard_access(
+        hosts=["panel.example.com"],
+        password="secretpass",
+        settings=get_settings(),
+    )
+    response = client.post("/settings/github/manifest")
+    assert response.status_code == 200
+    assert 'action="https://github.com/settings/apps/new"' in response.text
+    assert "panel.example.com/api/github/webhook" in response.text
+    assert 'name="state"' in response.text
+    assert "generated-by-github" not in response.text
+
+
+def test_dashboard_github_callback_redirects_to_install(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setattr(
+        "vps_deployer.dashboard.routes.complete_github_manifest",
+        lambda code, state, settings: "https://github.com/apps/vps-test/installations/new",
+    )
+    response = client.get(
+        "/settings/github/callback?code=temporary&state=valid",
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    assert response.headers["location"] == "https://github.com/apps/vps-test/installations/new"
 
 
 def test_dashboard_github_form_writes_files(client: TestClient, tmp_env) -> None:

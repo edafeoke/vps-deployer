@@ -220,6 +220,12 @@ Credentials stay on your VPS:
 - `{config_dir}/github-webhook-secret`
 - `{config_dir}/github.json` (app ID and installation ID only)
 
+The dashboard's GitHub App Manifest handshake derives the webhook and callback URLs
+from the persisted public dashboard URL. It stores a short-lived one-time state file,
+exchanges GitHub's callback code server-side, writes the generated credentials with
+mode `600`, and then redirects to GitHub's repository installation screen. Manual
+credential entry remains available.
+
 Webhook flow:
 
 ```

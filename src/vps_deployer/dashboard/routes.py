@@ -24,7 +24,14 @@ from vps_deployer.core.dashboard_access import (
 from vps_deployer.core.deployments import queue_deployment
 from vps_deployer.core.domains import DomainConflictError, DomainNotFoundError, add_domain
 from vps_deployer.core.engine import notify_worker
-from vps_deployer.core.github import configure_github
+from vps_deployer.core.github import (
+    GitHubAuthError,
+    GitHubNotConfiguredError,
+    begin_github_manifest,
+    complete_github_manifest,
+    configure_github,
+    set_github_installation,
+)
 from vps_deployer.core.nginx import NginxError
 from vps_deployer.core.projects import (
     ProjectConflictError,
@@ -372,3 +379,49 @@ def dashboard_settings_github(
     except ValueError as exc:
         return _redirect("/settings", error=_form_error(exc))
     return _redirect("/settings", notice="github_configured")
+
+
+@router.post("/settings/github/manifest", response_class=HTMLResponse)
+def dashboard_settings_github_manifest(request: Request) -> Response:
+    try:
+        handshake = begin_github_manifest(get_settings())
+    except ValueError as exc:
+        return _redirect("/settings", error=_form_error(exc))
+    context = {
+        **shell_context(),
+        "page": "settings",
+        "title": "Connect GitHub",
+        "action": handshake.action,
+        "manifest": handshake.manifest,
+        "state": handshake.state,
+    }
+    return _page(request, "github_manifest.html", context)
+
+
+@router.get("/settings/github/callback")
+def dashboard_settings_github_callback(code: str = "", state: str = "") -> RedirectResponse:
+    if not code or not state:
+        return _redirect("/settings", error="GitHub did not return a valid connection code.")
+    try:
+        install_url = complete_github_manifest(code, state, get_settings())
+    except (GitHubAuthError, GitHubNotConfiguredError, ValueError) as exc:
+        return _redirect("/settings", error=_form_error(exc))
+    return RedirectResponse(install_url, status_code=303)
+
+
+@router.get("/settings/github/installed")
+def dashboard_settings_github_installed(
+    installation_id: str = "",
+    setup_action: str = "",
+) -> RedirectResponse:
+    if not installation_id:
+        return _redirect(
+            "/settings",
+            error="GitHub App was created but no installation was selected.",
+        )
+    try:
+        set_github_installation(installation_id, get_settings())
+    except (GitHubAuthError, GitHubNotConfiguredError, ValueError) as exc:
+        return _redirect("/settings", error=_form_error(exc))
+    notice = "github_connected" if setup_action in {"install", "update"} else "github_configured"
+    return _redirect("/settings", notice=notice)

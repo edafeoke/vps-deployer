@@ -146,14 +146,17 @@ def _clone_source(project: Project, settings: Settings) -> str:
         local = Path(settings.git_clone_base) / project.repository
         if local.exists():
             return str(local)
-    try:
-        from vps_deployer.core.github import create_installation_token, is_github_configured
+    from vps_deployer.core.github import create_installation_token, is_github_configured
 
-        if is_github_configured(settings):
+    if is_github_configured(settings):
+        try:
             token = create_installation_token(settings)
             return f"https://x-access-token:{token}@github.com/{project.repository}.git"
-    except Exception:
-        pass
+        except Exception as exc:
+            raise DeployError(
+                f"GitHub App authentication failed: {exc}. "
+                "Reconnect GitHub in the dashboard Settings page."
+            ) from exc
     return f"https://github.com/{project.repository}.git"
 
 

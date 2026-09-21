@@ -3,13 +3,17 @@ title: GitHub
 summary: Store a GitHub App on your VPS and queue deploys from webhooks.
 ---
 
-Open **Settings** on this VPS dashboard and follow the GitHub App walkthrough.
+Open **Settings** on this VPS dashboard:
 
-1. Publish a hostname if GitHub must reach this VPS. Webhooks cannot hit `127.0.0.1`.
-2. Copy the webhook URL (`https://panel.example.com/api/github/webhook` when the dashboard is public).
-3. Create a GitHub App at [github.com/settings/apps/new](https://github.com/settings/apps/new). Set the webhook URL and a webhook secret. Subscribe to **push**. Repository permissions: Contents Read-only (and Metadata).
-4. Generate a private key and install the app on the account or organization.
-5. Paste the App ID, PEM, webhook secret, and optional installation ID. Store them on this VPS.
+1. Publish a hostname and enable HTTPS. Webhooks cannot reach `127.0.0.1`.
+2. Select **Connect GitHub**.
+3. GitHub creates a private App with the detected webhook URL, **Contents: Read-only**
+   permission, and **push** events.
+4. Choose the account or organization and repositories that the App may access.
+
+GitHub generates the App ID, private key, and webhook secret. VPS Deployer receives
+them through GitHub's one-time App Manifest handshake and stores them automatically.
+No credentials need to be copied into the dashboard.
 
 GitHub credentials stay on your VPS:
 
@@ -34,6 +38,7 @@ vps-deployer github repos
 ```
 
 `github status` prints `webhook_path` and `webhook_url` (the full URL after you publish a dashboard host).
+The manual credential form remains available under **Manual GitHub App setup**.
 
 ## Webhook
 

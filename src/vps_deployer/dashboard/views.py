@@ -39,6 +39,7 @@ NOTICES = {
     "password_updated": "Dashboard password updated.",
     "dashboard_ssl_enabled": "Dashboard HTTPS was requested.",
     "github_configured": "GitHub App credentials were stored on this VPS.",
+    "github_connected": "GitHub App connected. Repository access is ready.",
 }
 
 LOG_LIMIT = 200

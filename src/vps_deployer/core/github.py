@@ -3,10 +3,12 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import secrets
 import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 import httpx
 import jwt
@@ -22,7 +24,9 @@ USER_AGENT = "VPS-Deployer"
 PRIVATE_KEY_NAME = "github-app.pem"
 WEBHOOK_SECRET_NAME = "github-webhook-secret"
 META_NAME = "github.json"
+MANIFEST_STATE_NAME = "github-manifest-state.json"
 WEBHOOK_PATH = "/api/github/webhook"
+MANIFEST_STATE_TTL_SECONDS = 10 * 60
 
 
 class GitHubNotConfiguredError(RuntimeError):
@@ -49,6 +53,13 @@ class GitHubSettings:
     webhook_secret_path: Path
 
 
+@dataclass(frozen=True)
+class GitHubManifest:
+    action: str
+    manifest: str
+    state: str
+
+
 def _config_dir(settings: Settings | None = None) -> Path:
     current = settings or get_settings()
     current.ensure_directories()
@@ -73,6 +84,10 @@ def github_webhook_url(settings: Settings | None = None) -> str | None:
 def github_paths(settings: Settings | None = None) -> tuple[Path, Path, Path]:
     directory = _config_dir(settings)
     return directory / PRIVATE_KEY_NAME, directory / WEBHOOK_SECRET_NAME, directory / META_NAME
+
+
+def github_manifest_state_path(settings: Settings | None = None) -> Path:
+    return _config_dir(settings) / MANIFEST_STATE_NAME
 
 
 def is_github_configured(settings: Settings | None = None) -> bool:
@@ -149,6 +164,122 @@ def configure_github(
         ) from exc
     _record_installation(app_id, installation, settings)
     return load_github_settings(settings)
+
+
+def set_github_installation(
+    installation_id: str,
+    settings: Settings | None = None,
+) -> GitHubSettings:
+    installation = installation_id.strip()
+    if not installation.isdigit():
+        raise ValueError("GitHub installation ID must be numeric")
+    configured = load_github_settings(settings)
+    return configure_github(
+        app_id=configured.app_id,
+        private_key=_read_private_key(configured.private_key_path),
+        webhook_secret=read_webhook_secret(settings),
+        installation_id=installation,
+        settings=settings,
+    )
+
+
+def begin_github_manifest(settings: Settings | None = None) -> GitHubManifest:
+    webhook_url = github_webhook_url(settings)
+    if not webhook_url:
+        raise ValueError("Publish the dashboard before connecting GitHub")
+    base_url = webhook_url.removesuffix(WEBHOOK_PATH)
+    state = secrets.token_urlsafe(32)
+    suffix = secrets.token_hex(4)
+    payload = {
+        "name": f"VPS Deployer {suffix}",
+        "url": base_url,
+        "hook_attributes": {"url": webhook_url, "active": True},
+        "redirect_url": f"{base_url}/settings/github/callback",
+        "setup_url": f"{base_url}/settings/github/installed",
+        "public": False,
+        "default_permissions": {"contents": "read", "metadata": "read"},
+        "default_events": ["push"],
+    }
+    state_path = github_manifest_state_path(settings)
+    try:
+        state_path.write_text(
+            json.dumps({"state": state, "created_at": int(time.time())}) + "\n",
+            encoding="utf-8",
+        )
+        state_path.chmod(0o600)
+    except OSError as exc:
+        raise ValueError(f"Cannot start GitHub setup under {state_path.parent}") from exc
+    return GitHubManifest(
+        action="https://github.com/settings/apps/new",
+        manifest=json.dumps(payload),
+        state=state,
+    )
+
+
+def _verify_manifest_state(state: str, settings: Settings | None = None) -> Path:
+    state_path = github_manifest_state_path(settings)
+    try:
+        payload = json.loads(state_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise GitHubAuthError("GitHub connection request is missing or expired") from exc
+    expected = payload.get("state")
+    created_at = payload.get("created_at")
+    if not isinstance(expected, str) or not hmac.compare_digest(expected, state):
+        raise GitHubAuthError("GitHub connection state is invalid")
+    expired = isinstance(created_at, int) and (
+        int(time.time()) - created_at > MANIFEST_STATE_TTL_SECONDS
+    )
+    if not isinstance(created_at, int) or expired:
+        raise GitHubAuthError("GitHub connection request expired; start again")
+    return state_path
+
+
+def complete_github_manifest(
+    code: str,
+    state: str,
+    settings: Settings | None = None,
+) -> str:
+    state_path = _verify_manifest_state(state, settings)
+    try:
+        response = httpx.post(
+            f"{GITHUB_API}/app-manifests/{quote(code, safe='')}/conversions",
+            headers={
+                "Accept": "application/vnd.github+json",
+                "X-GitHub-Api-Version": GITHUB_API_VERSION,
+                "User-Agent": USER_AGENT,
+            },
+            timeout=10.0,
+        )
+    except httpx.HTTPError as exc:
+        raise GitHubAuthError("Unable to complete GitHub App setup") from exc
+    if response.status_code != 201:
+        raise GitHubAuthError(f"GitHub App setup returned HTTP {response.status_code}")
+    try:
+        payload = response.json()
+    except ValueError as exc:
+        raise GitHubAuthError("GitHub App setup returned an invalid response") from exc
+    if not isinstance(payload, dict):
+        raise GitHubAuthError("GitHub App setup returned an invalid response")
+    app_id = payload.get("id")
+    private_key = payload.get("pem")
+    webhook_secret = payload.get("webhook_secret")
+    html_url = payload.get("html_url")
+    if (
+        not isinstance(app_id, int)
+        or not isinstance(private_key, str)
+        or not isinstance(webhook_secret, str)
+        or not isinstance(html_url, str)
+        or not html_url.startswith("https://github.com/apps/")
+    ):
+        raise GitHubAuthError("GitHub App setup response is missing credentials")
+    configure_github(
+        app_id=str(app_id),
+        private_key=private_key,
+        webhook_secret=webhook_secret,
+        settings=settings,
+    )
+    state_path.unlink(missing_ok=True)
+    return f"{html_url.rstrip('/')}/installations/new"
 
 
 def _record_installation(

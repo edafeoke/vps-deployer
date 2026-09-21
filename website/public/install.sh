@@ -164,7 +164,7 @@ resolve_source() {
     version="$(printf '%s' "$version" | tr -d '[:space:]')"
   fi
   if [[ -z "$version" ]]; then
-    version="0.1.0"
+    version="0.3.0"
   fi
   if ! vd_validate_semver "$version"; then
     echo "Invalid version: ${version}" >&2
@@ -320,10 +320,10 @@ create_user_and_dirs() {
   chown vps-deployer:vps-deployer /var/www/apps
   chmod 755 /var/www/apps /var/www/certbot
   chown root:vps-deployer /etc/vps-deployer
-  chmod 750 /etc/vps-deployer
+  chmod 770 /etc/vps-deployer
   if [[ -d /etc/vps-deployer/projects ]]; then
     chown root:vps-deployer /etc/vps-deployer/projects
-    chmod 750 /etc/vps-deployer/projects
+    chmod 770 /etc/vps-deployer/projects
   fi
   if [[ -n "${SUDO_USER:-}" && "${SUDO_USER}" != "root" ]] && getent passwd "$SUDO_USER" >/dev/null; then
     usermod -aG vps-deployer "$SUDO_USER"

@@ -49,7 +49,10 @@ That page manages only the machine you installed on.
 
 ## 4. Configure GitHub and add a project
 
-On the dashboard, open **Settings**. Publish a hostname if GitHub must reach this VPS, copy the webhook URL, create the GitHub App, then paste the App ID, PEM, and webhook secret.
+On the dashboard, open **Settings**, publish a hostname, enable HTTPS, and select
+**Connect GitHub**. VPS Deployer identifies the webhook URL and asks GitHub to generate
+the App ID, private key, and webhook secret. Choose the repositories during GitHub's
+installation step; no credentials need to be copied manually.
 
 CLI is the same flow:
 

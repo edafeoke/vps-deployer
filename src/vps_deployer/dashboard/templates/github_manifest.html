@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero">
+  <h1>Connect GitHub</h1>
+  <p>Redirecting to GitHub to create the App and choose its owner.</p>
+</section>
+
+<form method="post" action="{{ action }}" data-auto-submit>
+  <input type="hidden" name="manifest" value="{{ manifest }}" />
+  <input type="hidden" name="state" value="{{ state }}" />
+  <button type="submit">Continue to GitHub</button>
+</form>
+{% endblock %}

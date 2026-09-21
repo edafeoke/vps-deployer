@@ -3,11 +3,14 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
+from conftest import make_github_pem
 from vps_deployer.core.deployments import queue_deployment
-from vps_deployer.core.engine import execute_deployment
-from vps_deployer.core.projects import ProjectCreate, create_project
+from vps_deployer.core.engine import DeployError, _clone_source, execute_deployment
+from vps_deployer.core.github import GitHubAuthError, configure_github
+from vps_deployer.core.projects import ProjectCreate, create_project, get_project
 
 
 def _git(path: Path, *args: str) -> str:
@@ -93,3 +96,23 @@ def test_failed_first_deploy_does_not_create_current(tmp_env: Path) -> None:
 def test_deploy_unknown_project(client: TestClient) -> None:
     response = client.post("/api/projects/missing-app/deploy")
     assert response.status_code == 404
+
+
+def test_clone_reports_configured_github_auth_error(tmp_env: Path, monkeypatch) -> None:
+    from vps_deployer.core.config import get_settings
+
+    project = create_project(
+        ProjectCreate(name="private-site", repository="example/private", runtime="static")
+    )
+    configure_github(
+        app_id="12345",
+        private_key=make_github_pem(),
+        webhook_secret="supersecret",
+    )
+
+    def fail_token(settings):
+        raise GitHubAuthError("GitHub API returned HTTP 401")
+
+    monkeypatch.setattr("vps_deployer.core.github.create_installation_token", fail_token)
+    with pytest.raises(DeployError, match="GitHub App authentication failed.*HTTP 401"):
+        _clone_source(get_project(project.name), get_settings())

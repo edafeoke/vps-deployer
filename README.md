@@ -92,6 +92,10 @@ vps-deployer dashboard enable --ip
 ssh -L 5100:127.0.0.1:5100 user@your-vps
 ```
 
+After publishing a hostname and enabling HTTPS, open **Settings** and select
+**Connect GitHub**. The GitHub App Manifest flow configures the webhook URL,
+read-only repository permission, private key, and webhook secret automatically.
+
 The public website is docs and the installer only. It does not register your VPS.
 
 ## Documentation

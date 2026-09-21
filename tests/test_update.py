@@ -35,7 +35,7 @@ def test_parse_latest_txt_strips_whitespace() -> None:
 def test_refuse_http_download_url() -> None:
     with pytest.raises(UpdateError, match="HTTPS"):
         run_update(
-            version="0.2.0",
+            version="0.3.0",
             current_version="0.1.0",
             require_root=False,
             site_url="http://example.com",
@@ -88,7 +88,7 @@ def test_newer_version_from_latest_txt_builds_installer_argv() -> None:
 
     def fetch_latest(url: str) -> str:
         fetched.append(url)
-        return "  0.2.0\n"
+        return "  0.3.0\n"
 
     run_update(
         current_version="0.1.0",
@@ -99,21 +99,21 @@ def test_newer_version_from_latest_txt_builds_installer_argv() -> None:
         runner=lambda args: called.append(args) or 0,
     )
     assert fetched == [f"{SITE}/releases/latest.txt"]
-    assert called[0][2:] == ["--version", "0.2.0"]
-    assert build_installer_argv(Path("/tmp/install.sh"), version="0.2.0") == [
+    assert called[0][2:] == ["--version", "0.3.0"]
+    assert build_installer_argv(Path("/tmp/install.sh"), version="0.3.0") == [
         "bash",
         "/tmp/install.sh",
         "--version",
-        "0.2.0",
+        "0.3.0",
     ]
 
 
 def test_source_and_version_together_fail(tmp_path: Path) -> None:
     with pytest.raises(UpdateError, match="together"):
-        plan_update(version="0.2.0", source=tmp_path)
+        plan_update(version="0.3.0", source=tmp_path)
     with pytest.raises(UpdateError, match="together"):
         run_update(
-            version="0.2.0",
+            version="0.3.0",
             source=tmp_path,
             require_root=False,
             site_url=SITE,
@@ -156,7 +156,7 @@ def test_update_cli_rejects_source_and_version(
     monkeypatch.setattr("vps_deployer.core.update.is_root", lambda: True)
     result = runner.invoke(
         app,
-        ["update", "--yes", "--version", "0.2.0", "--source", str(tmp_path)],
+        ["update", "--yes", "--version", "0.3.0", "--source", str(tmp_path)],
     )
     assert result.exit_code == 1
     assert "together" in result.stdout or "together" in result.stderr

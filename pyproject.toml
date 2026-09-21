@@ -1,6 +1,6 @@
 [project]
 name = "vps-deployer"
-version = "0.2.0"
+version = "0.3.0"
 description = "Self-hosted VPS deployment platform"
 readme = "README.md"
 authors = [

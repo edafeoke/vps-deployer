@@ -9,7 +9,13 @@ import jwt
 from fastapi.testclient import TestClient
 
 from conftest import make_github_pem
-from vps_deployer.core.github import configure_github, create_app_jwt, github_status
+from vps_deployer.core.github import (
+    begin_github_manifest,
+    complete_github_manifest,
+    configure_github,
+    create_app_jwt,
+    github_status,
+)
 
 
 def _sign(secret: str, body: bytes) -> str:
@@ -69,6 +75,44 @@ def test_create_app_jwt(tmp_env: Path) -> None:
     token = create_app_jwt(now=1_700_000_000)
     decoded = jwt.decode(token, options={"verify_signature": False})
     assert decoded["iss"] == "12345"
+
+
+def test_github_manifest_creates_and_stores_app(tmp_env: Path, monkeypatch) -> None:
+    from vps_deployer.core.config import get_settings
+    from vps_deployer.core.dashboard_access import enable_dashboard_access
+
+    enable_dashboard_access(
+        hosts=["panel.example.com"],
+        password="secretpass",
+        settings=get_settings(),
+    )
+    handshake = begin_github_manifest()
+    manifest = json.loads(handshake.manifest)
+    assert manifest["hook_attributes"]["url"] == (
+        "http://panel.example.com/api/github/webhook"
+    )
+    assert manifest["default_permissions"]["contents"] == "read"
+    assert manifest["default_events"] == ["push"]
+
+    class Response:
+        status_code = 201
+
+        @staticmethod
+        def json():
+            return {
+                "id": 12345,
+                "pem": make_github_pem(),
+                "webhook_secret": "generated-by-github",
+                "html_url": "https://github.com/apps/vps-deployer-test",
+            }
+
+    monkeypatch.setattr("vps_deployer.core.github.httpx.post", lambda *args, **kwargs: Response())
+    install_url = complete_github_manifest("temporary-code", handshake.state)
+    assert install_url == "https://github.com/apps/vps-deployer-test/installations/new"
+    status = github_status(probe=False)
+    assert status["configured"] is True
+    assert status["app_id"] == "12345"
+    assert not (tmp_env / "config" / "github-manifest-state.json").exists()
 
 
 def test_webhook_rejects_missing_and_invalid_signature(client: TestClient, tmp_env: Path) -> None:

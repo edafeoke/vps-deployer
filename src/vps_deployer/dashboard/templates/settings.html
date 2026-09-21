@@ -72,33 +72,45 @@
   {% if github.configured %}
   <p class="pass">Configured. App ID {{ github.app_id }}{% if github.installation_id %} · installation {{ github.installation_id }}{% endif %}.</p>
   {% else %}
-  <p class="warn">Not configured. Follow the walkthrough, then paste the credentials below.</p>
+  <p class="warn">Not configured.</p>
   {% endif %}
 
-  <ol class="plain">
-    <li>Publish a hostname above if GitHub must reach this VPS. Webhooks cannot hit <code>127.0.0.1</code>.</li>
-    <li>
-      Copy the webhook URL
-      {% if github.webhook_url %}
-      <span class="copy-row">
-        <code id="webhook-url">{{ github.webhook_url }}</code>
-        <button type="button" class="ghost" data-copy="webhook-url">Copy</button>
-      </span>
-      {% else %}
-      <code>{{ github.webhook_path }}</code>
-      — enable a public host first.
-      {% endif %}
-    </li>
-    <li>
-      Create a GitHub App at
-      <a href="https://github.com/settings/apps/new">github.com/settings/apps/new</a>.
-      Set the webhook URL and a webhook secret. Subscribe to <strong>push</strong>.
-      Repository permissions: Contents Read-only (and Metadata).
-    </li>
-    <li>Generate a private key and install the app on the account or organization.</li>
-    <li>Paste the App ID, PEM, webhook secret, and optional installation ID.</li>
-  </ol>
+  {% if github.webhook_url %}
+  <p>
+    VPS Deployer will create a private GitHub App with the correct webhook URL,
+    read-only repository permission, and push events. GitHub generates the private
+    key and webhook secret; both are stored only on this VPS.
+  </p>
+  <p class="copy-row">
+    <code id="webhook-url">{{ github.webhook_url }}</code>
+    <button type="button" class="ghost" data-copy="webhook-url">Copy</button>
+  </p>
+  <form method="post" action="/settings/github/manifest">
+    <button type="submit">{% if github.configured %}Reconnect GitHub{% else %}Connect GitHub{% endif %}</button>
+  </form>
+  {% if not dashboard.ssl %}
+  <p class="warn">Enable HTTPS above before connecting GitHub on a production VPS.</p>
+  {% endif %}
+  {% else %}
+  <p class="muted">
+    Publish this dashboard on a hostname first. VPS Deployer will then identify the
+    webhook URL automatically.
+  </p>
+  {% endif %}
 
+  <details>
+    <summary>Manual GitHub App setup</summary>
+    <ol class="plain">
+      <li>
+        Create a GitHub App at
+        <a href="https://github.com/settings/apps/new">github.com/settings/apps/new</a>.
+      </li>
+      <li>
+        Use <code>{{ github.webhook_url or github.webhook_path }}</code>, subscribe to
+        <strong>push</strong>, and grant Contents read-only permission.
+      </li>
+      <li>Generate a private key, install the app, and enter the credentials below.</li>
+    </ol>
   <form class="stack" method="post" action="/settings/github">
     <label>
       App ID
@@ -118,6 +130,7 @@
     </label>
     <button type="submit">Store on this VPS</button>
   </form>
+  </details>
 
   {% if github.configured %}
   <h3>Repositories this app can access</h3>
