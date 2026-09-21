@@ -30,13 +30,13 @@ Prepare your VPS:
 ## Quick install
 
 ```bash
-curl -fsSL https://vps-deployer.centralstackhq.com/install.sh | sudo bash
+curl -fsSL https://vps-deployer.onebitstack.com/install.sh | sudo bash
 ```
 
 Optional version pin:
 
 ```bash
-curl -fsSL https://vps-deployer.centralstackhq.com/install.sh | sudo bash -s -- --version 0.3.2
+curl -fsSL https://vps-deployer.onebitstack.com/install.sh | sudo bash -s -- --version 0.3.3
 ```
 
 ## Review before installation
@@ -44,7 +44,7 @@ curl -fsSL https://vps-deployer.centralstackhq.com/install.sh | sudo bash -s -- 
 Because the installer runs as root, inspect it first:
 
 ```bash
-curl -fsSL https://vps-deployer.centralstackhq.com/install.sh -o install.sh
+curl -fsSL https://vps-deployer.onebitstack.com/install.sh -o install.sh
 less install.sh
 sudo bash install.sh
 ```
@@ -88,7 +88,7 @@ Expected result: the service is running, the API answers on `127.0.0.1:5100`, an
 
 ## Next steps
 
-1. Read the getting-started docs: <https://vps-deployer.centralstackhq.com/docs/getting-started>
+1. Read the getting-started docs: <https://vps-deployer.onebitstack.com/docs/getting-started>
 2. Create a GitHub App, then:
 
    ```bash
@@ -148,7 +148,7 @@ Then start a new SSH session (or run `newgrp vps-deployer`) so the group applies
 
 `failed to open file .../uv.toml: Permission denied`. Re-download `install.sh` and re-run it. The installer now runs `uv` from `/opt/vps-deployer/app`, not from your home directory. Until that release is live, `cd /tmp` first.
 
-Unsupported operating system. Supported systems are Ubuntu 22.04 LTS or a newer LTS release, and Debian 12+. See <https://vps-deployer.centralstackhq.com/docs/requirements>.
+Unsupported operating system. Supported systems are Ubuntu 22.04 LTS or a newer LTS release, and Debian 12+. See <https://vps-deployer.onebitstack.com/docs/requirements>.
 
 ## Uninstall
 

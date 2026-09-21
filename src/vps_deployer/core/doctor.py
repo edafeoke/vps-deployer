@@ -17,7 +17,7 @@ Status = Literal["PASS", "WARN", "FAIL"]
 
 SUPPORTED_OS_MESSAGE = (
     "Supported systems: Ubuntu 22.04+, Ubuntu 24.04+, Debian 12+. "
-    "See https://vps-deployer.centralstackhq.com/docs/requirements"
+    "See https://vps-deployer.onebitstack.com/docs/requirements"
 )
 
 

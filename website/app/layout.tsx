@@ -21,7 +21,7 @@ export const metadata: Metadata = {
   },
   description:
     "Self-hosted deployment platform you install on your VPS. This website is docs and the installer only.",
-  metadataBase: new URL("https://vps-deployer.centralstackhq.com"),
+  metadataBase: new URL("https://vps-deployer.onebitstack.com"),
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

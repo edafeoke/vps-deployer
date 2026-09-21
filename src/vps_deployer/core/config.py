@@ -6,7 +6,7 @@ from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-DEFAULT_SITE_URL = "https://vps-deployer.centralstackhq.com"
+DEFAULT_SITE_URL = "https://vps-deployer.onebitstack.com"
 DEFAULT_API_HOST = "127.0.0.1"
 DEFAULT_API_PORT = 5100
 

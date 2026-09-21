@@ -2,7 +2,7 @@
 # VPS Deployer installer. Security-critical. Review before piping to bash.
 set -euo pipefail
 
-VD_SITE_URL="${VPS_DEPLOYER_SITE_URL:-https://vps-deployer.centralstackhq.com}"
+VD_SITE_URL="${VPS_DEPLOYER_SITE_URL:-https://vps-deployer.onebitstack.com}"
 VD_DEBUG="${VPS_DEPLOYER_DEBUG:-0}"
 VD_SOURCE=""
 VD_VERSION=""
@@ -164,7 +164,7 @@ resolve_source() {
     version="$(printf '%s' "$version" | tr -d '[:space:]')"
   fi
   if [[ -z "$version" ]]; then
-    version="0.3.2"
+    version="0.3.3"
   fi
   if ! vd_validate_semver "$version"; then
     echo "Invalid version: ${version}" >&2
@@ -379,12 +379,12 @@ EOF
     log "preserving existing /etc/vps-deployer/config.env"
   fi
   if [[ -f /etc/vps-deployer/config.env ]]; then
-    if grep -qx 'VPS_DEPLOYER_SITE_URL=https://vps-deployer.onebitstack.com' \
+    if grep -qx 'VPS_DEPLOYER_SITE_URL=https://vps-deployer.centralstackhq.com' \
       /etc/vps-deployer/config.env; then
       sed -i \
-        "s#^VPS_DEPLOYER_SITE_URL=https://vps-deployer.onebitstack.com\$#VPS_DEPLOYER_SITE_URL=${VD_SITE_URL}#" \
+        "s#^VPS_DEPLOYER_SITE_URL=https://vps-deployer.centralstackhq.com\$#VPS_DEPLOYER_SITE_URL=${VD_SITE_URL}#" \
         /etc/vps-deployer/config.env
-      log "migrated legacy public site URL to ${VD_SITE_URL}"
+      log "restored public update site URL to ${VD_SITE_URL}"
     fi
     chown vps-deployer:vps-deployer /etc/vps-deployer/config.env
     chmod 640 /etc/vps-deployer/config.env

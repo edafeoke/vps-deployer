@@ -3,16 +3,16 @@ title: Installation
 summary: How the installer works and how to review it.
 ---
 
-The installer is `https://vps-deployer.centralstackhq.com/install.sh`. It must run as root.
+The installer is `https://vps-deployer.onebitstack.com/install.sh`. It must run as root.
 
 ```bash
-curl -fsSL https://vps-deployer.centralstackhq.com/install.sh | sudo bash
+curl -fsSL https://vps-deployer.onebitstack.com/install.sh | sudo bash
 ```
 
 Pin a version:
 
 ```bash
-curl -fsSL https://vps-deployer.centralstackhq.com/install.sh | sudo bash -s -- --version 0.3.2
+curl -fsSL https://vps-deployer.onebitstack.com/install.sh | sudo bash -s -- --version 0.3.3
 ```
 
 Install from a local checkout:

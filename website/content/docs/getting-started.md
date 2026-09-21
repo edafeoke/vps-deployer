@@ -10,13 +10,13 @@ VPS Deployer is a self-hosted platform. You install it on your VPS. That machine
 On Ubuntu 22.04 LTS or a newer LTS release, or Debian 12+:
 
 ```bash
-curl -fsSL https://vps-deployer.centralstackhq.com/install.sh | sudo bash
+curl -fsSL https://vps-deployer.onebitstack.com/install.sh | sudo bash
 ```
 
 To read the installer first:
 
 ```bash
-curl -fsSL https://vps-deployer.centralstackhq.com/install.sh -o install.sh
+curl -fsSL https://vps-deployer.onebitstack.com/install.sh -o install.sh
 less install.sh
 sudo bash install.sh
 ```
@@ -46,6 +46,10 @@ ssh -L 5100:127.0.0.1:5100 user@your-vps
 ```
 
 That page manages only the machine you installed on.
+
+The dashboard hostname is independent from the public documentation and update site.
+For example, this VPS may use `https://vps-deployer.centralstackhq.com`, while
+installers and updates continue to come from `https://vps-deployer.onebitstack.com`.
 
 ## 4. Configure GitHub and add a project
 

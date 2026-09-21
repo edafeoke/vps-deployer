@@ -5,7 +5,7 @@ summary: Environment and files for this installation.
 
 Production config lives in `/etc/vps-deployer/`. Local development uses `./.local/`.
 
-`VPS_DEPLOYER_SITE_URL` (default `https://vps-deployer.centralstackhq.com`) is only used to print documentation and update URLs. Deploy, rollback, logs, and project management do not require this website.
+`VPS_DEPLOYER_SITE_URL` (default `https://vps-deployer.onebitstack.com`) is only used to print documentation and update URLs. It is not the hostname of your VPS dashboard. A dashboard such as `https://vps-deployer.centralstackhq.com` is configured separately under **Settings → Public access**. Deploy, rollback, logs, and project management do not require the documentation website.
 
 Useful variables:
 

@@ -2,7 +2,7 @@ import { CopyCommand } from "@/components/CopyCommand";
 import { SiteFooter, SiteHeader } from "@/components/SiteShell";
 
 const INSTALL =
-  "curl -fsSL https://vps-deployer.centralstackhq.com/install.sh | sudo bash";
+  "curl -fsSL https://vps-deployer.onebitstack.com/install.sh | sudo bash";
 
 export default function HomePage() {
   return (

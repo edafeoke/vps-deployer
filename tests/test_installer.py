@@ -46,8 +46,8 @@ def test_existing_install_skips_apt_when_dependencies_are_available() -> None:
     assert "Fix or disable the broken source under /etc/apt/sources.list.d" in install_packages
 
 
-def test_installer_migrates_legacy_public_site_url() -> None:
+def test_installer_restores_public_update_site_url() -> None:
     text = (ROOT / "installer" / "install.sh").read_text(encoding="utf-8")
     assert "vps-deployer.onebitstack.com" in text
-    assert "migrated legacy public site URL" in text
     assert "vps-deployer.centralstackhq.com" in text
+    assert "restored public update site URL" in text

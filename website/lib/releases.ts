@@ -7,11 +7,18 @@ export type Release = {
 
 export const releases: Release[] = [
   {
+    version: "0.3.3",
+    date: "2026-09-21",
+    title: "Update-site correction",
+    summary:
+      "Keep the shared documentation and update service on OneBitStack while treating each VPS dashboard hostname as independent configuration.",
+  },
+  {
     version: "0.3.2",
     date: "2026-09-21",
     title: "Dashboard and release polish",
     summary:
-      "Accept root dashboard URLs as host input, generate and copy manual GitHub webhook secrets, publish complete release history, and use the CentralStack public URL.",
+      "Accept root dashboard URLs as host input, generate and copy manual GitHub webhook secrets, and publish complete release history.",
   },
   {
     version: "0.3.1",
