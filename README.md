@@ -23,13 +23,13 @@ Deploy and manage it on that VPS
 On Ubuntu 22.04 LTS or a newer LTS release, or Debian 12+:
 
 ```bash
-curl -fsSL https://vps-deployer.onebitstack.com/install.sh | sudo bash
+curl -fsSL https://vps-deployer.centralstackhq.com/install.sh | sudo bash
 ```
 
 To inspect the installer before running it:
 
 ```bash
-curl -fsSL https://vps-deployer.onebitstack.com/install.sh -o install.sh
+curl -fsSL https://vps-deployer.centralstackhq.com/install.sh -o install.sh
 less install.sh
 sudo bash install.sh
 ```
@@ -106,7 +106,7 @@ The public website is docs and the installer only. It does not register your VPS
 - [Security](SECURITY.md)
 - [Contributing](CONTRIBUTING.md)
 
-Public docs: <https://vps-deployer.onebitstack.com/docs>
+Public docs: <https://vps-deployer.centralstackhq.com/docs>
 
 ## Local development
 

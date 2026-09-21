@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from urllib.parse import urlsplit
 
 PROJECT_NAME_RE = re.compile(r"^[a-z][a-z0-9-]{1,62}$")
 SERVICE_NAME_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._@:-]*$")
@@ -85,7 +86,27 @@ def is_ipv4(value: str) -> bool:
 
 
 def validate_dashboard_host(value: str) -> str:
-    candidate = value.strip().lower().rstrip(".")
+    raw = value.strip()
+    if "://" in raw:
+        try:
+            parsed = urlsplit(raw)
+            port = parsed.port
+        except ValueError as exc:
+            raise ValidationError("Invalid dashboard URL") from exc
+        if (
+            parsed.scheme not in {"http", "https"}
+            or not parsed.hostname
+            or parsed.username
+            or parsed.password
+            or port is not None
+            or parsed.path not in {"", "/"}
+            or parsed.query
+            or parsed.fragment
+        ):
+            raise ValidationError("Invalid dashboard URL. Enter a hostname or its root URL.")
+        candidate = parsed.hostname.lower().rstrip(".")
+    else:
+        candidate = raw.lower().rstrip(".")
     if is_ipv4(candidate):
         if candidate in {"0.0.0.0", "127.0.0.1"}:
             raise ValidationError("Dashboard IP must be a public address")

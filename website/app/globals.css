@@ -201,6 +201,11 @@ h1,
   margin: 2.4rem 0;
 }
 
+.release-list {
+  display: grid;
+  gap: 1rem;
+}
+
 .doc-layout {
   display: grid;
   grid-template-columns: 15rem 1fr;

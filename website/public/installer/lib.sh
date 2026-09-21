@@ -2,7 +2,7 @@
 # Shared installer helpers. Safe to source from tests.
 # shellcheck disable=SC2034
 
-VD_SITE_URL_DEFAULT="https://vps-deployer.onebitstack.com"
+VD_SITE_URL_DEFAULT="https://vps-deployer.centralstackhq.com"
 VD_MIN_CPU=2
 VD_MIN_RAM_MB=2048
 VD_MIN_DISK_GB=10

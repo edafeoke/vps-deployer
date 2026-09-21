@@ -38,7 +38,7 @@ vps-deployer ssl renew
 vps-deployer rollback my-next-app
 sudo vps-deployer update
 sudo vps-deployer update --yes
-sudo vps-deployer update --version 0.3.1
+sudo vps-deployer update --version 0.3.2
 sudo vps-deployer update --source /path/to/vps-deployer
 sudo vps-deployer update --force
 vps-deployer uninstall

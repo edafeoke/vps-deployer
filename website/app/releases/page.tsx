@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { SiteFooter, SiteHeader } from "@/components/SiteShell";
+import { currentRelease } from "@/lib/releases";
 
 export const metadata: Metadata = { title: "Releases" };
 
@@ -18,14 +19,11 @@ export default function ReleasesPage() {
       </section>
       <article className="card">
         <p className="stamp">Current</p>
-        <h2>0.1.0</h2>
-        <p className="muted">
-          First public installer, local API, CLI, dashboard, GitHub webhooks,
-          deployments, nginx, HTTPS, and rollback.
-        </p>
+        <h2>{currentRelease.version}</h2>
+        <p className="muted">{currentRelease.summary}</p>
         <p>
-          <a href="/releases/vps-deployer-0.1.0.tar.gz">
-            vps-deployer-0.1.0.tar.gz
+          <a href={`/releases/vps-deployer-${currentRelease.version}.tar.gz`}>
+            vps-deployer-{currentRelease.version}.tar.gz
           </a>
           {" · "}
           <Link href="/changelog">Changelog</Link>

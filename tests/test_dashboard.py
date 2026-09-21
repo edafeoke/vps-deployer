@@ -21,6 +21,8 @@ def test_dashboard_static_assets(client: TestClient) -> None:
     assert "--amber" in css.text
     script = client.get("/static/dashboard.js")
     assert script.status_code == 200
+    assert "data-generate-secret" in script.text
+    assert "crypto.getRandomValues" in script.text
 
 
 def test_dashboard_doctor(client: TestClient) -> None:
@@ -87,6 +89,7 @@ def test_dashboard_settings_page(client: TestClient) -> None:
     assert "/api/github/webhook" in response.text
     assert "Publish this dashboard on a hostname first" in response.text
     assert "github.com/settings/apps/new" in response.text
+    assert 'data-generate-secret="webhook-secret"' in response.text
 
 
 def test_dashboard_starts_github_manifest(client: TestClient, tmp_env) -> None:

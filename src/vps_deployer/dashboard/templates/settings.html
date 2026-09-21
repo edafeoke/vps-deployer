@@ -39,7 +39,7 @@
   <form class="stack" method="post" action="/settings/access">
     <label>
       Hostname
-      <input name="host" placeholder="panel.example.com" value="" />
+      <input name="host" placeholder="panel.example.com or https://panel.example.com/" value="" />
     </label>
     <label class="check">
       <input type="checkbox" name="use_ip" value="1" />
@@ -122,8 +122,12 @@
     </label>
     <label>
       Webhook secret
-      <input type="password" name="webhook_secret" required minlength="8" autocomplete="new-password" />
+      <input id="webhook-secret" type="password" name="webhook_secret" required minlength="8" autocomplete="new-password" />
     </label>
+    <div class="copy-row">
+      <button type="button" class="ghost" data-generate-secret="webhook-secret">Generate secret</button>
+      <button type="button" class="ghost" data-copy="webhook-secret">Copy secret</button>
+    </div>
     <label>
       Installation ID (optional)
       <input name="installation_id" inputmode="numeric" />

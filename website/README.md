@@ -1,6 +1,6 @@
 # VPS Deployer website
 
-Public site for `https://vps-deployer.onebitstack.com`.
+Public site for `https://vps-deployer.centralstackhq.com`.
 
 It serves the installer, documentation, and release archives. It does not register VPS instances or run deployments.
 

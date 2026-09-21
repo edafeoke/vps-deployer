@@ -62,6 +62,8 @@ def test_email() -> None:
 def test_dashboard_host_and_ipv4() -> None:
     assert validate_ipv4("203.0.113.10") == "203.0.113.10"
     assert validate_dashboard_host("panel.example.com") == "panel.example.com"
+    assert validate_dashboard_host("https://panel.example.com/") == "panel.example.com"
+    assert validate_dashboard_host("http://panel.example.com") == "panel.example.com"
     assert validate_dashboard_host("203.0.113.10") == "203.0.113.10"
     with pytest.raises(ValidationError):
         validate_ipv4("999.1.1.1")
@@ -69,6 +71,10 @@ def test_dashboard_host_and_ipv4() -> None:
         validate_dashboard_host("127.0.0.1")
     with pytest.raises(ValidationError):
         validate_dashboard_host("0.0.0.0")
+    with pytest.raises(ValidationError):
+        validate_dashboard_host("https://panel.example.com/settings")
+    with pytest.raises(ValidationError):
+        validate_dashboard_host("https://user@panel.example.com/")
 
 
 def test_domain_and_port() -> None:

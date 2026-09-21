@@ -10,7 +10,10 @@ document.addEventListener("click", (event) => {
   const copyId = target.getAttribute("data-copy");
   if (copyId) {
     const node = document.getElementById(copyId);
-    const text = node?.textContent?.trim();
+    const text =
+      node instanceof HTMLInputElement || node instanceof HTMLTextAreaElement
+        ? node.value
+        : node?.textContent?.trim();
     if (text && navigator.clipboard) {
       navigator.clipboard.writeText(text).then(() => {
         target.textContent = "Copied";
@@ -18,6 +21,17 @@ document.addEventListener("click", (event) => {
           target.textContent = "Copy";
         }, 1600);
       });
+    }
+  }
+  const secretId = target.getAttribute("data-generate-secret");
+  if (secretId) {
+    const input = document.getElementById(secretId);
+    if (input instanceof HTMLInputElement && window.crypto) {
+      const bytes = new Uint8Array(32);
+      window.crypto.getRandomValues(bytes);
+      input.value = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+      input.type = "text";
+      target.textContent = "Generated";
     }
   }
 });

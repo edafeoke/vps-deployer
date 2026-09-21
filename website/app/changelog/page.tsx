@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { SiteFooter, SiteHeader } from "@/components/SiteShell";
+import { releases } from "@/lib/releases";
 
 export const metadata: Metadata = { title: "Changelog" };
 
@@ -10,16 +11,17 @@ export default function ChangelogPage() {
       <SiteHeader current="/changelog" />
       <section className="section">
         <h1>Changelog</h1>
-        <article className="card">
-          <p className="stamp">0.1.0</p>
-          <h2>Initial release</h2>
-          <p className="muted">
-            Self-hosted installation on your VPS, localhost API and dashboard,
-            GitHub App webhooks, deployment engine, systemd app units, nginx
-            domains, Let&apos;s Encrypt, and rollback. This website publishes
-            docs and install.sh only.
-          </p>
-        </article>
+        <div className="release-list">
+          {releases.map((release) => (
+            <article className="card" key={release.version}>
+              <p className="stamp">
+                {release.version} · {release.date}
+              </p>
+              <h2>{release.title}</h2>
+              <p className="muted">{release.summary}</p>
+            </article>
+          ))}
+        </div>
       </section>
       <SiteFooter />
     </>

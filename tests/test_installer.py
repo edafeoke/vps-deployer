@@ -44,3 +44,10 @@ def test_existing_install_skips_apt_when_dependencies_are_available() -> None:
     assert '[[ "$VD_EXISTING" -eq 1 ]] && dependencies_available' in install_packages
     assert "All required dependencies are already installed; skipped APT." in install_packages
     assert "Fix or disable the broken source under /etc/apt/sources.list.d" in install_packages
+
+
+def test_installer_migrates_legacy_public_site_url() -> None:
+    text = (ROOT / "installer" / "install.sh").read_text(encoding="utf-8")
+    assert "vps-deployer.onebitstack.com" in text
+    assert "migrated legacy public site URL" in text
+    assert "vps-deployer.centralstackhq.com" in text

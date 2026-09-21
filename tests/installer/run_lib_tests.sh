@@ -52,7 +52,7 @@ rm -f "$tmp"
 vd_should_write_file "$tmp" || fail "missing file should be writable"
 pass "idempotent config preservation"
 
-vd_is_https_url "https://vps-deployer.onebitstack.com/install.sh" || fail "https url"
+vd_is_https_url "https://vps-deployer.centralstackhq.com/install.sh" || fail "https url"
 if vd_is_https_url "http://example.com/install.sh"; then
   fail "http url must be rejected"
 fi

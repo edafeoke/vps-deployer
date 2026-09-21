@@ -20,7 +20,7 @@ PUBLIC WEBSITE
 
 ### Product website
 
-Operated by the product owner at `https://vps-deployer.onebitstack.com`.
+Operated by the product owner at `https://vps-deployer.centralstackhq.com`.
 
 Responsibilities:
 
@@ -284,7 +284,7 @@ Default retention: 5 successful releases.
 ## Installer lifecycle
 
 ```
-curl -fsSL https://vps-deployer.onebitstack.com/install.sh | sudo bash
+curl -fsSL https://vps-deployer.centralstackhq.com/install.sh | sudo bash
     ↓
 Detect OS, arch, CPU, RAM, disk, network, sudo
     ↓
@@ -393,5 +393,5 @@ The default installation does not send telemetry. Your project source, credentia
 Semantic versioning: `MAJOR.MINOR.PATCH`.
 
 ```bash
-curl -fsSL https://vps-deployer.onebitstack.com/install.sh | sudo bash -s -- --version 1.2.0
+curl -fsSL https://vps-deployer.centralstackhq.com/install.sh | sudo bash -s -- --version 1.2.0
 ```
