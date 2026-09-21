@@ -56,6 +56,16 @@ sudo usermod -aG vps-deployer "$USER"
 
 Start a new SSH session (or `newgrp vps-deployer`) so the group applies. Until then, `sudo vps-deployer dashboard` works.
 
+## `Permission denied: '/etc/vps-deployer/ssl.json'`
+
+Upgrade to 0.3.6 or repair the existing state:
+
+```bash
+sudo chown vps-deployer:vps-deployer /etc/vps-deployer/ssl.json
+sudo chmod 600 /etc/vps-deployer/ssl.json
+sudo systemctl restart vps-deployer
+```
+
 ## `failed to open file .../uv.toml`
 
 The installer ran `uv` from your home directory. Re-download `install.sh` from this site and run it again. Until that build is live, `cd /tmp` first:

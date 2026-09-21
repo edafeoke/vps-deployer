@@ -7,11 +7,18 @@ export type Release = {
 
 export const releases: Release[] = [
   {
+    version: "0.3.6",
+    date: "2026-09-21",
+    title: "SSL state ownership",
+    summary:
+      "Repair root-owned SSL settings during updates, assign future writes to the service user, and keep project pages available when legacy SSL state is unreadable.",
+  },
+  {
     version: "0.3.5",
     date: "2026-09-21",
     title: "Privileged helper execution",
     summary:
-      "Allow the platform service to invoke its tightly restricted sudo helper while keeping NoNewPrivileges enabled for deployed application units.",
+      "Allow the platform service to invoke its restricted sudo helper while keeping NoNewPrivileges enabled for deployed application units.",
   },
   {
     version: "0.3.4",

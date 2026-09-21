@@ -60,6 +60,7 @@ def test_public_pages_use_current_release_history() -> None:
         "0.3.3",
         "0.3.4",
         "0.3.5",
+        "0.3.6",
     ):
         assert f'version: "{version}"' in releases
     changelog = (ROOT / "website" / "app" / "changelog" / "page.tsx").read_text(

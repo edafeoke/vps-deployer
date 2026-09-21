@@ -164,7 +164,7 @@ resolve_source() {
     version="$(printf '%s' "$version" | tr -d '[:space:]')"
   fi
   if [[ -z "$version" ]]; then
-    version="0.3.5"
+    version="0.3.6"
   fi
   if ! vd_validate_semver "$version"; then
     echo "Invalid version: ${version}" >&2
@@ -362,7 +362,8 @@ create_user_and_dirs() {
     /etc/vps-deployer/github-app.pem \
     /etc/vps-deployer/github-webhook-secret \
     /etc/vps-deployer/github.json \
-    /etc/vps-deployer/github-manifest-state.json; do
+    /etc/vps-deployer/github-manifest-state.json \
+    /etc/vps-deployer/ssl.json; do
     if [[ -f "$github_file" ]]; then
       chown vps-deployer:vps-deployer "$github_file"
       chmod 600 "$github_file"

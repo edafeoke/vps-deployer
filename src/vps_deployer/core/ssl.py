@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import json
+import os
+import pwd
 import subprocess
 from pathlib import Path
 
 from sqlmodel import Session, select
 
-from vps_deployer.core.config import Settings, get_settings
+from vps_deployer.core.config import PRODUCTION_CONFIG_DIR, Settings, get_settings
 from vps_deployer.core.domains import DomainNotFoundError, list_domains
 from vps_deployer.core.helper import HelperError, helper_available, require_helper
 from vps_deployer.core.nginx import apply_project_nginx, certificate_directory, project_hostnames
@@ -14,6 +16,8 @@ from vps_deployer.core.projects import get_project
 from vps_deployer.core.validation import validate_domain, validate_email, validate_project_name
 from vps_deployer.db.models import Domain
 from vps_deployer.db.session import get_engine, init_db
+
+SERVICE_USER = "vps-deployer"
 
 
 class SslError(RuntimeError):
@@ -39,7 +43,7 @@ def load_ssl_email(settings: Settings | None = None) -> str | None:
         return None
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
+    except (OSError, json.JSONDecodeError):
         return None
     email = payload.get("email") if isinstance(payload, dict) else None
     return str(email) if isinstance(email, str) and email else None
@@ -50,8 +54,19 @@ def save_ssl_email(email: str, settings: Settings | None = None) -> str:
     current.ensure_directories()
     validated = validate_email(email)
     path = ssl_email_path(current)
+    identity: tuple[int, int] | None = None
+    if current.config_dir == PRODUCTION_CONFIG_DIR:
+        try:
+            account = pwd.getpwnam(SERVICE_USER)
+        except KeyError as exc:
+            raise SslError(f"Service user {SERVICE_USER} does not exist") from exc
+        identity = (account.pw_uid, account.pw_gid)
+        if os.geteuid() not in {0, identity[0]}:
+            raise SslError("Run SSL configuration with sudo on a production install")
     path.write_text(json.dumps({"email": validated}) + "\n", encoding="utf-8")
     path.chmod(0o600)
+    if identity is not None and os.geteuid() == 0:
+        os.chown(path, *identity)
     return validated
 
 

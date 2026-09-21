@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 
+from vps_deployer.core.config import get_settings
 from vps_deployer.core.nginx import render_nginx_site
 from vps_deployer.core.projects import ProjectCreate, create_project
+from vps_deployer.core.ssl import load_ssl_email, save_ssl_email
 from vps_deployer.core.validation import APPS_ROOT
 from vps_deployer.db.models import Domain, Project
 
@@ -135,6 +138,43 @@ def test_enable_ssl_local(tmp_env: Path, client: TestClient) -> None:
     renewed = client.post("/api/ssl/renew")
     assert renewed.status_code == 200
     assert renewed.json()["renewed"] is True
+
+
+def test_root_ssl_email_write_assigns_file_to_service_user(tmp_env: Path, monkeypatch) -> None:
+    settings = get_settings()
+    assert settings.config_dir is not None
+    monkeypatch.setattr("vps_deployer.core.ssl.PRODUCTION_CONFIG_DIR", settings.config_dir)
+    monkeypatch.setattr(
+        "vps_deployer.core.ssl.pwd.getpwnam",
+        lambda _name: SimpleNamespace(pw_uid=123, pw_gid=456),
+    )
+    monkeypatch.setattr("vps_deployer.core.ssl.os.geteuid", lambda: 0)
+    ownership: list[tuple[Path, int, int]] = []
+    monkeypatch.setattr(
+        "vps_deployer.core.ssl.os.chown",
+        lambda path, uid, gid: ownership.append((Path(path), uid, gid)),
+    )
+
+    save_ssl_email("ops@example.com", settings)
+
+    assert ownership == [(settings.config_dir / "ssl.json", 123, 456)]
+
+
+def test_unreadable_ssl_email_does_not_break_status(tmp_env: Path, monkeypatch) -> None:
+    settings = get_settings().model_copy(update={"ssl_email": None})
+    assert settings.config_dir is not None
+    path = settings.config_dir / "ssl.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text('{"email":"ops@example.com"}\n', encoding="utf-8")
+    original = Path.read_text
+
+    def denied(current: Path, *args, **kwargs):
+        if current == path:
+            raise PermissionError("denied")
+        return original(current, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", denied)
+    assert load_ssl_email(settings) is None
 
 
 def test_ssl_requires_domain(tmp_env: Path, client: TestClient) -> None:
