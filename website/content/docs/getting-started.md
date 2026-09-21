@@ -7,7 +7,7 @@ VPS Deployer is a self-hosted platform. You install it on your VPS. That machine
 
 ## 1. Install on your VPS
 
-On Ubuntu 22.04+, Ubuntu 24.04+, or Debian 12+:
+On Ubuntu 22.04 LTS or a newer LTS release, or Debian 12+:
 
 ```bash
 curl -fsSL https://vps-deployer.onebitstack.com/install.sh | sudo bash

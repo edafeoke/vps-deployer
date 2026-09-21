@@ -13,6 +13,21 @@ journalctl -u vps-deployer-app-my-next-app
 
 Installer log: `/var/log/vps-deployer/installer.log`.
 
+## `repository ... no longer has a Release file`
+
+APT stops when any configured Ubuntu or third-party repository is invalid, even when
+that repository is unrelated to VPS Deployer. Find the source:
+
+```bash
+grep -Rls 'the-host-or-repository-from-the-error' \
+  /etc/apt/sources.list /etc/apt/sources.list.d 2>/dev/null
+```
+
+Disable or correct the reported source, run `sudo apt-get update`, and retry. Existing
+VPS Deployer installations skip APT during updates when all required dependencies are
+already installed. Prefer a supported Ubuntu LTS release because short-lived releases
+can lose third-party repository support.
+
 ## `Permission denied: '/etc/vps-deployer/config.env'`
 
 The config directory must be `root:vps-deployer` mode `770` and `config.env` mode `640` so the service user and the installing admin can read and write GitHub App files. Re-download `install.sh` and run it again, or fix the live VPS:
@@ -42,7 +57,7 @@ Deploy, rollback, logs, and the local dashboard still work. You only need the in
 
 ## Unsupported operating system
 
-Supported: Ubuntu 22.04+, Ubuntu 24.04+, Debian 12+. See [Requirements](/docs/requirements).
+Supported: Ubuntu 22.04 LTS or a newer LTS release, and Debian 12+. See [Requirements](/docs/requirements).
 
 ## Port 5100 already in use
 

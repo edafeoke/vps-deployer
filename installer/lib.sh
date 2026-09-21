@@ -32,6 +32,15 @@ vd_os_supported() {
   esac
 }
 
+vd_ubuntu_lts_supported() {
+  local version="${1:-}"
+  if [[ ! "$version" =~ ^([0-9]{2})\.04$ ]]; then
+    return 1
+  fi
+  local year="${BASH_REMATCH[1]}"
+  [[ "$((10#$year % 2))" -eq 0 ]] && vd_version_ge "$version" "22.04"
+}
+
 vd_parse_os_release() {
   local file="${1:-/etc/os-release}"
   VD_OS_ID=""

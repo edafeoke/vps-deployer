@@ -20,7 +20,7 @@ Deploy and manage it on that VPS
 
 ## Installation
 
-On Ubuntu 22.04+, Ubuntu 24.04+, or Debian 12+:
+On Ubuntu 22.04 LTS or a newer LTS release, or Debian 12+:
 
 ```bash
 curl -fsSL https://vps-deployer.onebitstack.com/install.sh | sudo bash
@@ -44,7 +44,7 @@ vps-deployer doctor
 
 ## Requirements
 
-- Ubuntu 22.04 LTS, Ubuntu 24.04 LTS, or Debian 12
+- Ubuntu 22.04 LTS or a newer LTS release, or Debian 12+
 - 2 CPU cores recommended
 - 2 GB RAM recommended
 - 10 GB free disk

@@ -36,3 +36,11 @@ def test_installer_config_dir_is_group_readable() -> None:
     assert "pre-install.staging" in text
     restore = text.split("restore_previous_install()")[1].split("run_uv_as_app_user")[0]
     assert "/var/www/apps" not in restore
+
+
+def test_existing_install_skips_apt_when_dependencies_are_available() -> None:
+    text = (ROOT / "installer" / "install.sh").read_text(encoding="utf-8")
+    install_packages = text.split("install_packages()")[1].split("create_user_and_dirs()")[0]
+    assert '[[ "$VD_EXISTING" -eq 1 ]] && dependencies_available' in install_packages
+    assert "All required dependencies are already installed; skipped APT." in install_packages
+    assert "Fix or disable the broken source under /etc/apt/sources.list.d" in install_packages

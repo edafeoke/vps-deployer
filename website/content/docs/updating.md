@@ -6,7 +6,7 @@ summary: Update VPS Deployer on this VPS.
 ```bash
 sudo vps-deployer update
 sudo vps-deployer update --yes
-sudo vps-deployer update --version 0.3.0
+sudo vps-deployer update --version 0.3.1
 sudo vps-deployer update --source /path/to/vps-deployer
 sudo vps-deployer update --force
 ```

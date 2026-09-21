@@ -18,6 +18,11 @@ vd_os_supported ubuntu 24.04 || fail "ubuntu 24.04 should be supported"
 vd_os_supported ubuntu 22.04 || fail "ubuntu 22.04 should be supported"
 vd_os_supported debian 12 || fail "debian 12 should be supported"
 vd_os_supported debian 13 || fail "debian 13 should be supported"
+vd_ubuntu_lts_supported 24.04 || fail "ubuntu 24.04 LTS should be supported"
+vd_ubuntu_lts_supported 26.04 || fail "ubuntu 26.04 LTS should be supported"
+if vd_ubuntu_lts_supported 25.04; then
+  fail "ubuntu 25.04 should not be identified as LTS"
+fi
 if vd_os_supported ubuntu 20.04; then
   fail "ubuntu 20.04 should be rejected"
 fi

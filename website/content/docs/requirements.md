@@ -5,8 +5,7 @@ summary: Operating systems and hardware for a VPS Deployer installation.
 
 ## Operating systems
 
-- Ubuntu 22.04 LTS or newer
-- Ubuntu 24.04 LTS or newer
+- Ubuntu 22.04 LTS or a newer LTS release
 - Debian 12 or newer
 
 amd64 and arm64 are supported.

@@ -8,8 +8,7 @@ You do not need an account on the VPS Deployer website.
 
 Supported operating systems:
 
-- Ubuntu 22.04 LTS or newer
-- Ubuntu 24.04 LTS or newer
+- Ubuntu 22.04 LTS or a newer LTS release
 - Debian 12 or newer
 
 Recommended minimum hardware:
@@ -37,7 +36,7 @@ curl -fsSL https://vps-deployer.onebitstack.com/install.sh | sudo bash
 Optional version pin:
 
 ```bash
-curl -fsSL https://vps-deployer.onebitstack.com/install.sh | sudo bash -s -- --version 0.3.0
+curl -fsSL https://vps-deployer.onebitstack.com/install.sh | sudo bash -s -- --version 0.3.1
 ```
 
 ## Review before installation
@@ -149,7 +148,7 @@ Then start a new SSH session (or run `newgrp vps-deployer`) so the group applies
 
 `failed to open file .../uv.toml: Permission denied`. Re-download `install.sh` and re-run it. The installer now runs `uv` from `/opt/vps-deployer/app`, not from your home directory. Until that release is live, `cd /tmp` first.
 
-Unsupported operating system. Supported systems are Ubuntu 22.04+, Ubuntu 24.04+, and Debian 12+. See <https://vps-deployer.onebitstack.com/docs/requirements>.
+Unsupported operating system. Supported systems are Ubuntu 22.04 LTS or a newer LTS release, and Debian 12+. See <https://vps-deployer.onebitstack.com/docs/requirements>.
 
 ## Uninstall
 

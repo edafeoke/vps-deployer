@@ -164,7 +164,7 @@ resolve_source() {
     version="$(printf '%s' "$version" | tr -d '[:space:]')"
   fi
   if [[ -z "$version" ]]; then
-    version="0.3.0"
+    version="0.3.1"
   fi
   if ! vd_validate_semver "$version"; then
     echo "Invalid version: ${version}" >&2
@@ -199,8 +199,7 @@ system_check() {
     echo
     echo "Supported systems:"
     echo
-    echo "Ubuntu 22.04+"
-    echo "Ubuntu 24.04+"
+    echo "Ubuntu 22.04 LTS or newer LTS"
     echo "Debian 12+"
     echo
     echo "See:"
@@ -218,14 +217,18 @@ system_check() {
     echo
     echo "Supported systems:"
     echo
-    echo "Ubuntu 22.04+"
-    echo "Ubuntu 24.04+"
+    echo "Ubuntu 22.04 LTS or newer LTS"
     echo "Debian 12+"
     echo
     echo "See:"
     echo
     echo "  ${VD_SITE_URL}/docs/requirements"
     exit 1
+  fi
+  if [[ "$VD_OS_ID" == "ubuntu" ]] && ! vd_ubuntu_lts_supported "$VD_OS_VERSION"; then
+    vd_mark warn "Ubuntu ${VD_OS_VERSION} is not an LTS release"
+    echo "  Non-LTS releases may lose third-party APT repository support."
+    echo "  Prefer a currently supported Ubuntu LTS release."
   fi
 
   local arch
@@ -271,11 +274,45 @@ system_check() {
   echo
 }
 
+dependencies_available() {
+  local command
+  for command in curl git python3 tar adduser rsync nginx certbot uv; do
+    if ! command -v "$command" >/dev/null 2>&1; then
+      return 1
+    fi
+  done
+  return 0
+}
+
+print_dependency_status() {
+  vd_mark ok "Git"
+  vd_mark ok "Python"
+  vd_mark ok "uv"
+  vd_mark ok "Nginx"
+  vd_mark ok "certbot"
+  echo
+}
+
 install_packages() {
+  if [[ "$VD_EXISTING" -eq 1 ]] && dependencies_available; then
+    echo "Verifying dependencies..."
+    echo
+    print_dependency_status
+    echo "All required dependencies are already installed; skipped APT."
+    echo
+    return 0
+  fi
+
   echo "Installing dependencies..."
   echo
   export DEBIAN_FRONTEND=noninteractive
-  apt-get update -y >/dev/null
+  if ! apt-get update -y; then
+    echo
+    echo "APT could not refresh package indexes."
+    echo "Fix or disable the broken source under /etc/apt/sources.list.d, then retry."
+    echo "Existing VPS Deployer files and applications were not changed."
+    exit 1
+  fi
   apt-get install -y --no-install-recommends \
     ca-certificates curl git python3 python3-venv tar adduser rsync >/dev/null
   if ! command -v nginx >/dev/null 2>&1; then
@@ -287,12 +324,7 @@ install_packages() {
   if ! command -v uv >/dev/null 2>&1; then
     curl -fsSL https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh
   fi
-  vd_mark ok "Git"
-  vd_mark ok "Python"
-  vd_mark ok "uv"
-  vd_mark ok "Nginx"
-  vd_mark ok "certbot"
-  echo
+  print_dependency_status
 }
 
 create_user_and_dirs() {
