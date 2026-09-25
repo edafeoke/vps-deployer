@@ -103,6 +103,13 @@ def test_dashboard_starts_github_manifest(client: TestClient, tmp_env) -> None:
         password="secretpass",
         settings=get_settings(),
     )
+    login = client.post(
+        "/login",
+        data={"password": "secretpass", "next": "/settings"},
+        headers={"Host": "panel.example.com"},
+        follow_redirects=False,
+    )
+    assert login.status_code == 303
     response = client.post("/settings/github/manifest")
     assert response.status_code == 200
     assert 'action="https://github.com/settings/apps/new"' in response.text

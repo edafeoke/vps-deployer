@@ -1,4 +1,18 @@
 :root {
+  /* shadcn semantic tokens adapted to the server-rendered panel. */
+  --background: #12100c;
+  --foreground: #efe4cc;
+  --card: #1b1812;
+  --card-foreground: #efe4cc;
+  --primary: #e3a008;
+  --primary-foreground: #1a1408;
+  --secondary: #272116;
+  --secondary-foreground: #efe4cc;
+  --muted-foreground: #9c8f76;
+  --border: #3a3224;
+  --input: #332a1b;
+  --ring: #e3a008;
+  --radius: 0.65rem;
   --bg: #12100c;
   --ink: #efe4cc;
   --muted: #9c8f76;
@@ -29,6 +43,13 @@ body {
   font-family: var(--mono);
   font-size: 14px;
   line-height: 1.55;
+}
+
+button,
+input,
+select,
+textarea {
+  border-radius: var(--radius);
 }
 
 body {
@@ -138,6 +159,18 @@ a {
   border-bottom: 1px solid var(--amber);
 }
 
+.nav a {
+  border-radius: 999px;
+  padding: 0.3rem 0.65rem;
+  text-decoration: none;
+}
+
+.nav a:hover,
+.nav a:focus-visible {
+  background: var(--secondary);
+  outline: none;
+}
+
 .hero h1,
 section h2 {
   font-family: var(--display);
@@ -210,6 +243,34 @@ pre.log {
 .failed,
 .bad {
   color: var(--fail);
+}
+
+.auth-shell {
+  min-height: 48vh;
+  display: grid;
+  place-items: center;
+  padding: 3rem 0;
+}
+
+.auth-card {
+  width: min(100%, 28rem);
+  background: color-mix(in srgb, var(--card) 94%, transparent);
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) + 0.15rem);
+  padding: 1.5rem;
+  box-shadow: 0 1.5rem 4rem rgba(0, 0, 0, 0.22);
+}
+
+.auth-card h1 {
+  margin-top: 0;
+}
+
+.auth-card .stamp {
+  color: var(--primary);
+}
+
+.auth-card button {
+  width: 100%;
 }
 
 table {

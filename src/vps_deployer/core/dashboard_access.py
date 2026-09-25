@@ -222,9 +222,13 @@ def requires_dashboard_auth(
 ) -> bool:
     if path_is_auth_exempt(path):
         return False
+    state = load_dashboard_state(settings)
+    # Once a password is configured, protect direct localhost/API access too.
+    # Previously only published Host names were protected, which made the panel
+    # appear unlocked when reached through 127.0.0.1 or an imperfect proxy.
+    if state is not None and state.password_hash:
+        return True
     host = request_host(host_header)
-    if is_local_dashboard_host(host):
-        return False
     return is_public_dashboard_host(host, settings)
 
 
@@ -503,6 +507,8 @@ def set_dashboard_password(password: str, settings: Settings | None = None) -> d
         )
     else:
         existing.password_hash = hash_password(password)
+        # Changing the password also signs out every existing browser session.
+        existing.session_secret = secrets.token_urlsafe(32)
     _write_state(existing, current)
     return {"updated": True, "enabled": existing.enabled}
 
