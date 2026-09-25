@@ -48,7 +48,8 @@ Allowed actions:
 - `service-status`
 - `nginx-test`, `nginx-reload`, `nginx-site-check`, `nginx-site-install`, `nginx-site-remove`
 - `dashboard-site-check`, `dashboard-site-install`, `dashboard-site-remove`
-- `ssl-issue`, `ssl-renew`
+- `ssl-issue`, `ssl-renew`, `ssl-external-check`
+- `nginx-site-read` (only the named project's managed site)
 - `app-start`, `app-stop`, `app-restart`, `app-status`, `app-enable`, `app-disable`, `app-logs`
 - `app-unit-check`, `app-unit-install`, `app-unit-remove`
 
@@ -65,6 +66,10 @@ cannot invoke the helper.
 Nginx site files must be named `vps-deployer-<project>.conf`. They may listen on ports 80 and 443, use `server_name` values that pass domain validation, `proxy_pass` only to `http://127.0.0.1:33000-33999`, and `root` only under `/var/www/apps/<project>/` or `/var/www/certbot`. The optional dashboard site is `vps-deployer.conf` and may `proxy_pass` only to `http://127.0.0.1:5100`. TLS files must be `/etc/letsencrypt/live/<hostname>/fullchain.pem` and `privkey.pem`. `include`, `alias`, and shell metacharacters are rejected.
 
 `ssl-issue` accepts only a validated email and hostnames. It runs `certbot certonly --webroot` with a fixed argv list. Private keys stay on disk under `/etc/letsencrypt/` and are never written to logs or SQLite.
+
+External TLS paths are also allowed under `/etc/ssl/vps-deployer/<project>/`, with simple `.pem`, `.crt`, or `.key` filenames. Activation checks root ownership, no symlinks, no group/other writes, private key mode 600/400, validity dates, hostname coverage, and matching public keys. The API/dashboard only receive paths. No Cloudflare API token is required. This validation does not establish public CA trust.
+
+Project Nginx edits may tune request sizes and proxy timeouts. The API preserves routing/TLS declarations and the helper independently enforces its directive allowlist. Failed production test/reload restores the old site. Local development validates config without invoking Nginx.
 
 ## Secrets
 

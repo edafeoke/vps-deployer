@@ -41,7 +41,7 @@ from vps_deployer.core.github import (
     handle_github_webhook,
     list_accessible_repositories,
 )
-from vps_deployer.core.nginx import NginxError, apply_project_nginx
+from vps_deployer.core.nginx import NginxError, apply_project_nginx, nginx_status, save_nginx_config
 from vps_deployer.core.projects import (
     ProjectConflictError,
     ProjectCreate,
@@ -61,7 +61,13 @@ from vps_deployer.core.services import (
     start_project,
     stop_project,
 )
-from vps_deployer.core.ssl import SslError, enable_ssl, renew_certificates, ssl_status
+from vps_deployer.core.ssl import (
+    SslError,
+    enable_external_ssl,
+    enable_ssl,
+    renew_certificates,
+    ssl_status,
+)
 from vps_deployer.core.validation import ValidationError
 from vps_deployer.core.version import get_version
 from vps_deployer.dashboard.routes import mount_dashboard_static
@@ -323,6 +329,7 @@ def api_add_domain(project: str, body: DomainAddBody) -> dict[str, object]:
         ProjectNotFoundError,
         DomainConflictError,
         NginxError,
+        SslError,
         ValueError,
     ) as exc:
         if isinstance(exc, ValueError) and not isinstance(
@@ -349,6 +356,47 @@ def api_apply_nginx(project: str) -> dict[str, object]:
         domains = list_domains(row.name, get_settings())
         return apply_project_nginx(row, domains, get_settings())
     except (ValidationError, ProjectNotFoundError, NginxError) as exc:
+        raise _project_error(exc) from exc
+
+
+class NginxConfigBody(BaseModel):
+    content: str = Field(min_length=1, max_length=12000)
+
+
+@app.get("/api/projects/{project}/nginx")
+def api_nginx_status(project: str) -> dict[str, object]:
+    try:
+        return nginx_status(project, get_settings())
+    except (ValidationError, ProjectNotFoundError, NginxError) as exc:
+        raise _project_error(exc) from exc
+
+
+@app.put("/api/projects/{project}/nginx")
+def api_save_nginx(project: str, body: NginxConfigBody) -> dict[str, object]:
+    try:
+        return save_nginx_config(project, body.content, get_settings())
+    except (ValidationError, ProjectNotFoundError, NginxError) as exc:
+        raise _project_error(exc) from exc
+
+
+@app.delete("/api/projects/{project}/nginx")
+def api_reset_nginx(project: str) -> dict[str, object]:
+    try:
+        return save_nginx_config(project, None, get_settings())
+    except (ValidationError, ProjectNotFoundError, NginxError) as exc:
+        raise _project_error(exc) from exc
+
+
+class ExternalSslBody(BaseModel):
+    certificate: str = Field(max_length=4096)
+    certificate_key: str = Field(max_length=4096)
+
+
+@app.post("/api/projects/{project}/ssl/external")
+def api_external_ssl(project: str, body: ExternalSslBody) -> dict[str, object]:
+    try:
+        return enable_external_ssl(project, body.certificate, body.certificate_key, get_settings())
+    except (ValidationError, ProjectNotFoundError, NginxError, SslError) as exc:
         raise _project_error(exc) from exc
 
 

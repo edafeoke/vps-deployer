@@ -4,8 +4,11 @@ import json
 import os
 import pwd
 import subprocess
+from datetime import UTC, datetime
 from pathlib import Path
 
+from cryptography import x509
+from cryptography.hazmat.primitives import serialization
 from sqlmodel import Session, select
 
 from vps_deployer.core.config import PRODUCTION_CONFIG_DIR, Settings, get_settings
@@ -13,6 +16,13 @@ from vps_deployer.core.domains import DomainNotFoundError, list_domains
 from vps_deployer.core.helper import HelperError, helper_available, require_helper
 from vps_deployer.core.nginx import apply_project_nginx, certificate_directory, project_hostnames
 from vps_deployer.core.projects import get_project
+from vps_deployer.core.site_config import (
+    external_certificate_path,
+    load_site_config,
+    require_generated_site,
+    save_site_config,
+    site_mutation,
+)
 from vps_deployer.core.validation import validate_domain, validate_email, validate_project_name
 from vps_deployer.db.models import Domain
 from vps_deployer.db.session import get_engine, init_db
@@ -119,6 +129,7 @@ def _mark_ssl(project_id: int, enabled: bool, settings: Settings) -> None:
         session.commit()
 
 
+@site_mutation
 def enable_ssl(
     project_name: str,
     hostname: str | None = None,
@@ -127,6 +138,7 @@ def enable_ssl(
 ) -> dict[str, object]:
     current = settings or get_settings()
     project = get_project(validate_project_name(project_name), current)
+    require_generated_site(project.name, current)
     domains = list_domains(project.name, current)
     if not domains:
         raise SslError("Attach a domain before enabling HTTPS", status_code=409)
@@ -134,8 +146,7 @@ def enable_ssl(
         wanted = validate_domain(hostname)
         if not any(row.hostname == wanted for row in domains):
             raise DomainNotFoundError(f"Domain not found: {wanted}")
-        selected = [row for row in domains if row.hostname == wanted]
-        names = project_hostnames(selected)
+        names = project_hostnames(domains)
         primary = wanted
     else:
         names = project_hostnames(domains)
@@ -150,9 +161,18 @@ def enable_ssl(
         apply_project_nginx(project, domains, current)
         _issue_letsencrypt(saved, primary, names, current)
     assert project.id is not None
+    for domain in domains:
+        domain.ssl_enabled = True
+    # The renderer uses the first enabled domain; use the selected certificate explicitly.
+    cert_dir = certificate_directory(primary, current)
+    state = {
+        "provider": "letsencrypt",
+        "certificate": str(cert_dir / "fullchain.pem"),
+        "certificate_key": str(cert_dir / "privkey.pem"),
+    }
+    applied = apply_project_nginx(project, domains, current, state=state)
+    save_site_config(project.name, state, current)
     _mark_ssl(project.id, True, current)
-    domains = list_domains(project.name, current)
-    applied = apply_project_nginx(project, domains, current)
     return {
         "project": project.name,
         "email": saved,
@@ -167,15 +187,92 @@ def ssl_status(project_name: str, settings: Settings | None = None) -> dict[str,
     current = settings or get_settings()
     project = get_project(validate_project_name(project_name), current)
     domains = list_domains(project.name, current)
+    state = load_site_config(project.name, current)
+    primary = next((d.hostname for d in domains if d.ssl_enabled), None)
+    directory = certificate_directory(primary, current) if primary else None
     return {
         "project": project.name,
         "email": load_ssl_email(current),
         "ssl": any(row.ssl_enabled for row in domains),
+        "provider": state.get("provider", "letsencrypt" if primary else "none"),
+        "certificate": state.get("certificate")
+        or (str(directory / "fullchain.pem") if directory else None),
+        "certificate_key": state.get("certificate_key")
+        or (str(directory / "privkey.pem") if directory else None),
         "domains": [
             {"hostname": row.hostname, "www": row.www_enabled, "ssl": row.ssl_enabled}
             for row in domains
         ],
     }
+
+
+def validate_external_certificate(
+    name: str,
+    certificate: str,
+    key: str,
+    hostnames: list[str],
+    settings: Settings,
+) -> None:
+    external_certificate_path(certificate, name, settings)
+    external_certificate_path(key, name, settings)
+    if settings.nginx_dir is None:
+        try:
+            require_helper(
+                "ssl-external-check", name, certificate, key, *hostnames, settings=settings
+            )
+        except HelperError as exc:
+            raise SslError(str(exc), status_code=422) from exc
+        return
+    try:
+        cert = x509.load_pem_x509_certificate(Path(certificate).read_bytes())
+        private = serialization.load_pem_private_key(Path(key).read_bytes(), password=None)
+        public_format = serialization.PublicFormat.SubjectPublicKeyInfo
+        if cert.public_key().public_bytes(
+            serialization.Encoding.DER, public_format
+        ) != private.public_key().public_bytes(serialization.Encoding.DER, public_format):
+            raise ValueError("Certificate and private key do not match")
+        if not cert.not_valid_before_utc <= datetime.now(UTC) < cert.not_valid_after_utc:
+            raise ValueError("Certificate is expired or not yet valid")
+        names = cert.extensions.get_extension_for_class(
+            x509.SubjectAlternativeName
+        ).value.get_values_for_type(x509.DNSName)
+        for hostname in hostnames:
+            if not any(
+                hostname == dns.lower()
+                or (
+                    dns.startswith("*.")
+                    and hostname.split(".", 1)[-1] == dns[2:].lower()
+                    and hostname.count(".") == dns.count(".")
+                )
+                for dns in names
+            ):
+                raise ValueError(f"Certificate does not cover {hostname}")
+    except (OSError, ValueError, TypeError, x509.ExtensionNotFound) as exc:
+        raise SslError("Invalid external certificate: " + str(exc), status_code=422) from exc
+
+
+@site_mutation
+def enable_external_ssl(
+    name: str,
+    certificate: str,
+    certificate_key: str,
+    settings: Settings | None = None,
+) -> dict[str, object]:
+    current = settings or get_settings()
+    project = get_project(name, current)
+    require_generated_site(name, current)
+    domains = list_domains(name, current)
+    if not domains:
+        raise SslError("Attach a domain before enabling HTTPS", status_code=409)
+    validate_external_certificate(
+        name, certificate, certificate_key, project_hostnames(domains), current
+    )
+    state = {"provider": "external", "certificate": certificate, "certificate_key": certificate_key}
+    apply_project_nginx(project, domains, current, state=state)
+    save_site_config(name, state, current)
+    assert project.id is not None
+    _mark_ssl(project.id, True, current)
+    return ssl_status(name, current)
 
 
 def renew_certificates(settings: Settings | None = None) -> dict[str, object]:

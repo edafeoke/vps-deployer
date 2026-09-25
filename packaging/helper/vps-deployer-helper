@@ -21,6 +21,7 @@ Allowed actions:
   app-unit-install <project>
   app-unit-remove <project>
   nginx-site-check <project>
+  nginx-site-read <project>
   nginx-site-install <project>
   nginx-site-remove <project>
   dashboard-site-check
@@ -29,6 +30,7 @@ Allowed actions:
   nginx-reload
   ssl-issue <email> <cert-name> <hostname> [hostname...]
   ssl-renew
+  ssl-external-check <project> <certificate> <key> <hostname> [hostname...]
 EOF
 }
 
@@ -306,6 +308,7 @@ validate_nginx_site() {
     if [[ "$stripped" == root* ]]; then
       rootpath="${stripped#root }"
       rootpath="${rootpath%;}"
+      [[ "$rootpath" =~ ^/[a-zA-Z0-9_/-]+$ ]] || reject "invalid nginx root characters"
       if [[ "$rootpath" != "/var/www/certbot" && "$rootpath" != "/var/www/apps/${project}" && "$rootpath" != /var/www/apps/${project}/* ]]; then
         reject "invalid nginx root"
       fi
@@ -325,6 +328,10 @@ validate_nginx_site() {
     if [[ "$stripped" == ssl_certificate_key* ]]; then
       certpath="${stripped#ssl_certificate_key }"
       certpath="${certpath%;}"
+      if [[ "$certpath" == /etc/ssl/vps-deployer/"${project}"/* ]]; then
+        validate_external_path "$project" "$certpath"
+        continue
+      fi
       if [[ ! "$certpath" =~ ^/etc/letsencrypt/live/[a-z0-9.-]+/privkey.pem$ ]]; then
         reject "invalid certificate path"
       fi
@@ -336,6 +343,10 @@ validate_nginx_site() {
     if [[ "$stripped" == ssl_certificate* ]]; then
       certpath="${stripped#ssl_certificate }"
       certpath="${certpath%;}"
+      if [[ "$certpath" == /etc/ssl/vps-deployer/"${project}"/* ]]; then
+        validate_external_path "$project" "$certpath"
+        continue
+      fi
       if [[ ! "$certpath" =~ ^/etc/letsencrypt/live/[a-z0-9.-]+/fullchain.pem$ ]]; then
         reject "invalid certificate path"
       fi
@@ -354,6 +365,9 @@ validate_nginx_site() {
       if [[ "$stripped" != 'return 301 https://$host$request_uri;' ]]; then
         reject "invalid return directive"
       fi
+      continue
+    fi
+    if [[ "$stripped" =~ ^client_max_body_size\ [1-9][0-9]{0,3}[mk]\;$ || "$stripped" =~ ^proxy_(read|connect|send)_timeout\ [1-9][0-9]{0,3}s\;$ ]]; then
       continue
     fi
     case "$stripped" in
@@ -495,6 +509,71 @@ read_nginx_stdin() {
   printf '%s' "$content"
 }
 
+validate_external_path() {
+  local project="$1" path="$2" filename
+  filename="${path##*/}"
+  [[ "${path%/*}" == "/etc/ssl/vps-deployer/${project}" ]] || reject "invalid external certificate directory"
+  [[ "$filename" =~ ^[a-zA-Z0-9_-]+\.(pem|crt|key)$ ]] || reject "invalid external certificate filename"
+}
+
+check_external_certificate() {
+  local project="$1" cert="$2" key="$3" path host parent cert_public key_public
+  shift 3
+  [[ $# -gt 0 && $# -le 20 ]] || reject "provide 1-20 certificate hostnames"
+  for path in "$cert" "$key"; do
+    validate_external_path "$project" "$path"
+    [[ -f "$path" && "$(readlink -f -- "$path")" == "$path" ]] || reject "certificate must be a regular file without symlinks"
+    [[ "$(stat -c %u "$path")" == 0 ]] || reject "external certificate files must be owned by root"
+    [[ -z "$(find "$path" -maxdepth 0 -perm /022 -print)" ]] || reject "external certificate files must not be group/world writable"
+    parent="${path%/*}"
+    while [[ "$parent" != / ]]; do
+      [[ "$(stat -c %u "$parent")" == 0 ]] || reject "certificate directories must be owned by root"
+      [[ -z "$(find "$parent" -maxdepth 0 -perm /022 -print)" ]] || reject "certificate directories must not be group/world writable"
+      parent="${parent%/*}"
+      [[ -n "$parent" ]] || parent=/
+    done
+  done
+  [[ -z "$(find "$key" -maxdepth 0 -perm /077 -print)" ]] || reject "private key must have mode 600 or 400"
+  openssl x509 -in "$cert" -noout -checkend 0 >/dev/null 2>&1 || reject "invalid or expired certificate"
+  openssl verify -no-CAfile -no-CApath -partial_chain -trusted "$cert" "$cert" >/dev/null 2>&1 || reject "certificate is not currently valid"
+  cert_public="$(openssl x509 -in "$cert" -pubkey -noout 2>/dev/null)" || reject "invalid certificate"
+  key_public="$(openssl pkey -in "$key" -passin pass: -pubout 2>/dev/null)" || reject "invalid or encrypted private key"
+  [[ "$cert_public" == "$key_public" ]] || reject "certificate and key do not match"
+  for host in "$@"; do
+    validate_nginx_hostname "$host"
+    openssl verify -no-CAfile -no-CApath -partial_chain -trusted "$cert" -verify_hostname "$host" "$cert" >/dev/null 2>&1 || reject "certificate does not cover $host"
+  done
+}
+
+# Serialize Nginx mutations and restore files/symlinks when test or reload fails.
+install_project_site_transaction() {
+  local project="$1" content="$2" site backup directory target
+  site="$(nginx_site_name "$project")"
+  exec 9>/run/lock/vps-deployer-nginx.lock
+  flock -x 9
+  backup="$(mktemp -d)"
+  for directory in sites-available sites-enabled conf.d; do
+    target="/etc/nginx/${directory}/${site}"
+    if [[ -e "$target" || -L "$target" ]]; then
+      cp -a -- "$target" "${backup}/${directory}"
+    fi
+  done
+  if install_named_nginx_site "$site" "$content" && nginx -t && reload_nginx; then
+    rm -rf -- "$backup"
+    return 0
+  fi
+  remove_nginx_site_files "$project"
+  for directory in sites-available sites-enabled conf.d; do
+    if [[ -e "${backup}/${directory}" || -L "${backup}/${directory}" ]]; then
+      cp -a -- "${backup}/${directory}" "/etc/nginx/${directory}/${site}"
+    fi
+  done
+  rm -rf -- "$backup"
+  reload_nginx || true
+  echo "nginx test/reload failed; previous site restored" >&2
+  return 3
+}
+
 read_dashboard_nginx_stdin() {
   local content
   content="$(cat)"
@@ -535,12 +614,12 @@ install_named_nginx_site() {
   tmp="$(mktemp)"
   printf '%s\n' "$content" >"$tmp"
   if [[ -d /etc/nginx/sites-available ]]; then
-    install -m 0644 "$tmp" "/etc/nginx/sites-available/${site}"
+    install -m 0644 "$tmp" "/etc/nginx/sites-available/${site}" || { rm -f "$tmp"; return 3; }
     if [[ -d /etc/nginx/sites-enabled ]]; then
-      ln -sfn "/etc/nginx/sites-available/${site}" "/etc/nginx/sites-enabled/${site}"
+      ln -sfn "/etc/nginx/sites-available/${site}" "/etc/nginx/sites-enabled/${site}" || { rm -f "$tmp"; return 3; }
     fi
   elif [[ -d /etc/nginx/conf.d ]]; then
-    install -m 0644 "$tmp" "/etc/nginx/conf.d/${site}"
+    install -m 0644 "$tmp" "/etc/nginx/conf.d/${site}" || { rm -f "$tmp"; return 3; }
   else
     rm -f "$tmp"
     reject "nginx configuration directory is missing"
@@ -575,18 +654,33 @@ case "$action" in
     read_nginx_stdin "$project" >/dev/null
     echo "ok"
     ;;
+  nginx-site-read)
+    project="${2:-}"
+    validate_project_name "$project"
+    site="$(nginx_site_name "$project")"
+    if [[ -d /etc/nginx/sites-available ]]; then
+      path="/etc/nginx/sites-available/${site}"
+    else
+      path="/etc/nginx/conf.d/${site}"
+    fi
+    printf '%s\n' "$path"
+    [[ ! -L "$path" ]] || reject "site file must not be a symlink"
+    if [[ -f "$path" ]]; then cat -- "$path"; fi
+    ;;
+  ssl-external-check)
+    project="${2:-}"
+    validate_project_name "$project"
+    shift 2
+    [[ $# -ge 3 ]] || reject "missing certificate, key or hostnames"
+    check_external_certificate "$project" "$@"
+    echo "ok"
+    ;;
   nginx-site-install)
     project="${2:-}"
     validate_project_name "$project"
     require_nginx
     content="$(read_nginx_stdin "$project")"
-    install_named_nginx_site "$(nginx_site_name "$project")" "$content"
-    if ! nginx -t >/dev/null 2>&1; then
-      remove_nginx_site_files "$project"
-      echo "nginx configuration test failed" >&2
-      exit 3
-    fi
-    reload_nginx
+    install_project_site_transaction "$project" "$content"
     ;;
   dashboard-site-check)
     read_dashboard_nginx_stdin >/dev/null

@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import os
 import subprocess
 from pathlib import Path
+
+import pytest
 
 from vps_deployer.core.dashboard_access import render_dashboard_nginx
 from vps_deployer.core.nginx import render_nginx_site
@@ -158,3 +161,92 @@ def test_helper_ssl_issue_rejects_invalid_input() -> None:
     assert _run("ssl-issue", "ops@example.com", "other.com", "example.com").returncode == 2
     missing = _run("ssl-issue", "ops@example.com", "example.com", "example.com")
     assert missing.returncode in {2, 4}
+
+
+def test_helper_accepts_external_paths_and_tuning() -> None:
+    site = (
+        _site()
+        .replace("32m;", "64m;")
+        .replace(
+            "proxy_http_version 1.1;", "proxy_http_version 1.1;\n        proxy_read_timeout 120s;"
+        )
+        .replace(
+            "    listen 80;",
+            "    listen 443 ssl;\n"
+            "    ssl_certificate /etc/ssl/vps-deployer/my-next-app/origin.pem;\n"
+            "    ssl_certificate_key /etc/ssl/vps-deployer/my-next-app/origin.key;",
+        )
+    )
+    assert _run("nginx-site-check", "my-next-app", stdin=site).returncode == 0
+    wrong = site.replace("/my-next-app/origin", "/other-app/origin")
+    assert _run("nginx-site-check", "my-next-app", stdin=wrong).returncode == 2
+    assert _run("nginx-site-read", "../etc").returncode == 2
+    assert (
+        _run(
+            "ssl-external-check", "my-next-app", "/etc/passwd", "/etc/shadow", "example.com"
+        ).returncode
+        == 2
+    )
+    injected = _site().replace(
+        "root /var/www/certbot;", "root /var/www/apps/my-next-app/a; include /etc/evil;"
+    )
+    assert _run("nginx-site-check", "my-next-app", stdin=injected).returncode == 2
+
+
+@pytest.mark.parametrize("failure", ["test", "reload", "none"])
+@pytest.mark.parametrize("existing", [True, False])
+def test_helper_transaction_restores_files_and_symlinks(tmp_path, failure, existing):
+    # Run the real helper logic against an isolated filesystem and fake Nginx.
+    root = tmp_path / "nginx"
+    for subdir in ("sites-available", "sites-enabled", "conf.d"):
+        (root / subdir).mkdir(parents=True)
+    site = root / "sites-available/vps-deployer-my-next-app.conf"
+    enabled = root / "sites-enabled/vps-deployer-my-next-app.conf"
+    if existing:
+        site.write_text("old site\n")
+        enabled.symlink_to(site)
+    bins = tmp_path / "bin"
+    bins.mkdir()
+    nginx = bins / "nginx"
+    nginx.write_text(
+        "#!/bin/bash\n"
+        'if grep -q "client_max_body_size" "$TEST_SITE" 2>/dev/null; then\n'
+        '  [[ "$TEST_FAILURE" == test && "$1" == -t ]] && exit 1\n'
+        '  [[ "$TEST_FAILURE" == reload && "$1" == -s ]] && exit 1\n'
+        "fi\nexit 0\n"
+    )
+    nginx.chmod(0o755)
+    for command, code in (("flock", 0), ("systemctl", 1)):
+        mock = bins / command
+        mock.write_text(f"#!/bin/sh\nexit {code}\n")
+        mock.chmod(0o755)
+    script = (
+        HELPER.read_text()
+        .replace("/etc/nginx", str(root))
+        .replace("/run/lock/vps-deployer-nginx.lock", str(tmp_path / "lock"))
+    )
+    result = subprocess.run(
+        ["bash", "-c", script, "helper", "nginx-site-install", "my-next-app"],
+        input=_site(),
+        text=True,
+        capture_output=True,
+        env={
+            **os.environ,
+            "PATH": f"{bins}:{os.environ['PATH']}",
+            "TEST_SITE": str(site),
+            "TEST_FAILURE": failure,
+        },
+        check=False,
+    )
+    if failure == "none":
+        assert result.returncode == 0, result.stderr
+        assert "client_max_body_size" in site.read_text()
+        assert enabled.resolve() == site
+    else:
+        assert result.returncode == 3, result.stderr
+        assert "previous site restored" in result.stderr
+        assert site.exists() == existing
+        assert enabled.is_symlink() == existing
+        if existing:
+            assert site.read_text() == "old site\n"
+            assert enabled.resolve() == site

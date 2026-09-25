@@ -4,6 +4,7 @@ import sys
 import time
 from pathlib import Path
 
+import click
 import typer
 from rich.console import Console
 from rich.table import Table
@@ -44,6 +45,7 @@ project_app = typer.Typer(help="Manage projects on this VPS.")
 github_app = typer.Typer(help="Configure the GitHub App for this VPS.")
 domain_app = typer.Typer(help="Attach domains on this VPS.")
 ssl_app = typer.Typer(help="Enable HTTPS on this VPS.")
+nginx_app = typer.Typer(help="Inspect and edit project Nginx configuration.")
 dashboard_app = typer.Typer(
     help="Open or publish the dashboard for this VPS.",
     invoke_without_command=True,
@@ -52,6 +54,7 @@ app.add_typer(project_app, name="project")
 app.add_typer(github_app, name="github")
 app.add_typer(domain_app, name="domain")
 app.add_typer(ssl_app, name="ssl")
+app.add_typer(nginx_app, name="nginx")
 app.add_typer(dashboard_app, name="dashboard")
 
 console = Console()
@@ -517,11 +520,84 @@ def ssl_status_cmd(name: str) -> None:
     console.print(f"project: {payload.get('project')}")
     console.print(f"ssl: {payload.get('ssl')}")
     console.print(f"email: {payload.get('email')}")
+    for key in ("provider", "certificate", "certificate_key"):
+        console.print(f"{key}: {payload.get(key)}", markup=False)
     rows = payload.get("domains", [])
     if isinstance(rows, list):
         for row in rows:
             if isinstance(row, dict):
                 console.print(f"{row.get('hostname')}: ssl={row.get('ssl')} www={row.get('www')}")
+
+
+@nginx_app.command("show")
+def nginx_show(name: str, raw: bool = typer.Option(False, "--raw")) -> None:
+    """Show installed Nginx config and app/TLS file locations."""
+    payload = _api("GET", f"/api/projects/{name}/nginx")
+    if not raw:
+        for key in (
+            "path",
+            "installed",
+            "custom",
+            "deployment_path",
+            "current_path",
+            "release_path",
+            "roots",
+            "upstreams",
+            "certificates",
+            "certificate_keys",
+            "error",
+        ):
+            console.print(f"{key}: {payload.get(key)}", markup=False)
+    # Avoid Rich markup/highlighting/wrapping: --raw can be redirected to a config file.
+    typer.echo(str(payload.get("content", "")), nl=False)
+
+
+@nginx_app.command("edit")
+def nginx_edit(name: str) -> None:
+    """Edit in $VISUAL/$EDITOR, validate, and apply the project site."""
+    payload = _api("GET", f"/api/projects/{name}/nginx")
+    edited = click.edit(str(payload.get("content", "")), extension=".conf")
+    if edited is None:
+        console.print("No changes.")
+        return
+    _api("PUT", f"/api/projects/{name}/nginx", {"content": edited})
+    console.print("Nginx config saved and applied.")
+
+
+@nginx_app.command("apply")
+def nginx_apply(
+    name: str,
+    file: Path = typer.Option(..., "--file", exists=True, dir_okay=False),
+) -> None:
+    """Validate and apply a config file, preserving it across deployments."""
+    _api("PUT", f"/api/projects/{name}/nginx", {"content": file.read_text(encoding="utf-8")})
+    console.print("Nginx config saved and applied.")
+
+
+@nginx_app.command("reset")
+def nginx_reset(name: str, yes: bool = typer.Option(False, "--yes")) -> None:
+    """Discard custom edits and restore generated config."""
+    if not yes and not typer.confirm("Discard custom Nginx edits?"):
+        raise typer.Abort()
+    _api("DELETE", f"/api/projects/{name}/nginx")
+    console.print("Generated Nginx config restored.")
+
+
+@ssl_app.command("external")
+def ssl_external(
+    name: str,
+    certificate: str = typer.Option(..., "--certificate", help="Certificate path on the VPS"),
+    key: str = typer.Option(..., "--key", help="Private key path on the VPS"),
+) -> None:
+    """Use an existing certificate, including Cloudflare Origin CA."""
+    payload = _api(
+        "POST",
+        f"/api/projects/{name}/ssl/external",
+        {"certificate": certificate, "certificate_key": key},
+    )
+    console.print(f"External HTTPS enabled for {payload.get('project')}")
+    console.print(f"certificate: {payload.get('certificate')}", markup=False)
+    console.print(f"certificate_key: {payload.get('certificate_key')}", markup=False)
 
 
 @ssl_app.command("renew")

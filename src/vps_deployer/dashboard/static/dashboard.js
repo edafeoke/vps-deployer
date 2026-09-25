@@ -37,11 +37,17 @@ document.addEventListener("click", (event) => {
 });
 
 const refreshRoot = document.querySelector("[data-refresh]");
+let formEdited = false;
+document.addEventListener("input", (event) => {
+  if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
+    formEdited = true;
+  }
+});
 if (refreshRoot instanceof HTMLElement) {
   const seconds = Number(refreshRoot.getAttribute("data-refresh") || "0");
   if (seconds > 0) {
     window.setTimeout(() => {
-      window.location.reload();
+      if (!formEdited) window.location.reload();
     }, seconds * 1000);
   }
 }

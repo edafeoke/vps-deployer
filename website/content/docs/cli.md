@@ -35,10 +35,16 @@ vps-deployer domain remove my-next-app example.com
 vps-deployer ssl enable my-next-app --email ops@example.com
 vps-deployer ssl status my-next-app
 vps-deployer ssl renew
+vps-deployer ssl external my-next-app --certificate /etc/ssl/vps-deployer/my-next-app/origin.pem --key /etc/ssl/vps-deployer/my-next-app/origin.key
+vps-deployer nginx show my-next-app
+vps-deployer nginx show my-next-app --raw
+vps-deployer nginx edit my-next-app
+vps-deployer nginx apply my-next-app --file ./my-next-app.conf
+vps-deployer nginx reset my-next-app
 vps-deployer rollback my-next-app
 sudo vps-deployer update
 sudo vps-deployer update --yes
-sudo vps-deployer update --version 0.3.6
+sudo vps-deployer update --version 0.4.0
 sudo vps-deployer update --source /path/to/vps-deployer
 sudo vps-deployer update --force
 vps-deployer uninstall

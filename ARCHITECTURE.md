@@ -378,7 +378,9 @@ The helper installs, tests (`nginx -t`), and reloads nginx. A failed `nginx -t` 
 
 `vps-deployer ssl enable` issues a Let's Encrypt certificate through the helper (`certbot certonly --webroot`) and rewrites the site with `listen 443 ssl`. Port 80 keeps `/.well-known/acme-challenge/` and redirects other HTTP traffic to HTTPS.
 
-Certificates live in `/etc/letsencrypt/live/<hostname>/`. The helper accepts only those paths. Local development writes a short-lived self-signed certificate under the configured SSL directory. Private keys are never stored in SQLite or logs.
+Let's Encrypt certificates live in `/etc/letsencrypt/live/<hostname>/`. External certificates, including Cloudflare Origin CA, use root-owned files under `/etc/ssl/vps-deployer/<project>/`. The helper checks validity, hostname coverage, and key matching. Local development writes short-lived self-signed certificates under the configured SSL directory. Private keys are never stored in SQLite or logs.
+
+The dashboard and CLI expose installed project Nginx config and paths. Saved custom config and external certificate paths live in `/etc/vps-deployer/sites/<project>.json`; deployments preserve this state. Custom config must be reset before domain/SSL changes. Production project-site installs serialize with a lock and restore prior files/symlinks after test or reload failure.
 
 ## Runtime abstraction
 

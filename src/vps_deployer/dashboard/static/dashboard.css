@@ -297,6 +297,19 @@ textarea {
   resize: vertical;
 }
 
+#nginx-config {
+  display: block;
+  width: 100%;
+  margin-bottom: 0.8rem;
+  white-space: pre;
+  overflow: auto;
+  tab-size: 4;
+}
+
+form.stack > label {
+  margin-bottom: 0.8rem;
+}
+
 .copy-row {
   display: inline-flex;
   flex-wrap: wrap;
