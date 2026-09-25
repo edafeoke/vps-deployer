@@ -17,4 +17,6 @@ summary: Localhost API, a whitelist helper, and no telemetry.
 - The default installation sends no telemetry.
 - This website does not store VPS or GitHub credentials.
 
+The Nginx and Services menus grant operational control over eligible existing host configs and services, including unmanaged apps. Treat dashboard access as host administration access. The root helper constrains file paths/directives, checks config revisions and Nginx validation, retains backups, protects infrastructure services, and omits process arguments/environment values. Cross-origin host mutations are rejected.
+
 See the repository [SECURITY.md](https://github.com/edafeoke/vps-deployer/blob/main/SECURITY.md) for the helper whitelist.

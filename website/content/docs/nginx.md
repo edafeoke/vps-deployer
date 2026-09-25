@@ -3,6 +3,41 @@ title: Nginx
 summary: How site files are written, tested, and reloaded.
 ---
 
+## Host-wide Nginx menu
+
+Open **Nginx** in the web panel to discover files under `/etc/nginx`, including `nginx.conf`, `conf.d`, `sites-available`, `sites-enabled`, snippets and other files reported by `nginx -T` inside that directory. Enabled symlinks are grouped with their source file. Symlinks that escape the Nginx directory are shown as errors and cannot be edited. Non-default Nginx installations outside `/etc/nginx` are not managed by this inventory.
+
+The table shows domains, roots/upstreams, ownership (deployed project, imported app, unmanaged), and validation:
+
+| Status | Meaning |
+| --- | --- |
+| OK | The enabled configuration is included in a passing active-config test |
+| Error | File access failed or Nginx attributed a validation error to this file |
+| Unknown | Active config validation failed elsewhere, or Nginx is unavailable |
+| Unchecked | Disabled/shared file not established as valid by the active-config test |
+
+These are configuration checks, not HTTP/application health checks. A disabled file is not marked valid just because the other sites pass. Nginx validates syntax and referenced files with [`-t`/`-T`](https://nginx.org/en/docs/switches.html).
+
+Click a filename to edit it. **Save & test** writes and checks the active configuration without reloading. **Save & reload** also requests a graceful Nginx reload. A failed check/reload restores previous files. Stale edits are rejected; reload the file and reapply your changes. Failed form submissions retain the edited text.
+
+For existing configs, routing and tuning directives can be changed. New document roots must be under `/var/www` or `/srv`; new upstreams use loopback TCP addresses. Existing Unix-socket upstreams, certificate paths, includes and logging directives are preserved. New/changed privileged file, include, module and scripting directives are rejected, even if Nginx would accept their syntax. Git-managed project configs retain the narrower project editor rules below and save/apply as one operation.
+
+**Disable website** removes enabled links or moves a standalone config to `/etc/nginx/disabled-sites/<original-directory>/`. **Enable website** restores inclusion. **Delete website config** removes the config and its enabled links. Disable/delete require typing the exact config ID. Application files, backend processes and certificates are not deleted; stop a backend through Services if required. Infrastructure/dashboard access has dedicated controls.
+
+Backups are kept in `/var/backups/vps-deployer/nginx/site-*/` with a `manifest.json` listing the original paths and numbered copies (including symlinks). An administrator can restore the corresponding files from that backup over SSH, then test and reload Nginx. Backups are not rotated automatically. Configs referenced by other includes may fail removal; the operation rolls back if the full configuration stops validating.
+
+Disabling/deleting a Git-managed project's site records its disabled state so subsequent deployments do not silently publish it again. **Reset to generated config** on the project page restores that site's generated config.
+
+## Import an existing website
+
+On an unmanaged site's editor, choose **Import into VPS Deployer**, enter a unique application name, and optionally select its systemd service. This adopts it in place: no file migration, restart, certificate replacement, Git clone or new release. Imported applications appear in **Projects** and **Services & processes** with the original config and service links.
+
+Importing provides operational management, not conversion into the Git deployment/release workflow. Create a separate deployment project when you are ready for that transition. Sites managed by another tool may still be rewritten by that tool; importing does not disable it.
+
+Local development uses `VPS_DEPLOYER_NGINX_DIR` and labels validation unverified. It simulates host config changes and keeps backups under the local data directory without testing/reloading a real Nginx daemon. Production requires the 0.5.0 helper installed by the normal updater.
+
+## Generated project sites
+
 Each project gets `vps-deployer-<project>.conf` in nginx sites-available/enabled (or `conf.d` on installations without sites-available).
 
 HTTP (`listen 80`) either proxies a process app to `127.0.0.1:<port>` or serves static files from `/var/www/apps/<project>/current`. HTTPS adds `listen 443 ssl`.

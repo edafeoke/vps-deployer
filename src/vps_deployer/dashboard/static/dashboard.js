@@ -56,3 +56,13 @@ const autoSubmitForm = document.querySelector("form[data-auto-submit]");
 if (autoSubmitForm instanceof HTMLFormElement) {
   autoSubmitForm.submit();
 }
+
+document.querySelectorAll("input[data-filter]").forEach((input) => {
+  input.addEventListener("input", () => {
+    const container = document.getElementById(input.dataset.filter);
+    const query = input.value.trim().toLowerCase();
+    container?.querySelectorAll("[data-filter-row]").forEach((row) => {
+      row.hidden = !row.textContent.toLowerCase().includes(query);
+    });
+  });
+});

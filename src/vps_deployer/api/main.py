@@ -70,6 +70,7 @@ from vps_deployer.core.ssl import (
 )
 from vps_deployer.core.validation import ValidationError
 from vps_deployer.core.version import get_version
+from vps_deployer.dashboard.host_routes import router as host_router
 from vps_deployer.dashboard.routes import mount_dashboard_static
 from vps_deployer.dashboard.routes import router as dashboard_router
 from vps_deployer.db.session import get_engine, init_db
@@ -93,6 +94,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 app.include_router(dashboard_router)
+app.include_router(host_router)
 mount_dashboard_static(app)
 
 

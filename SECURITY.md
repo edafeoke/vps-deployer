@@ -45,6 +45,8 @@ You do not create a website account to use VPS Deployer.
 
 Allowed actions:
 
+- `host-nginx-inventory`, `host-nginx-read`, `host-nginx-action`, `host-service-inventory`, `host-service-action` dispatch to an isolated, root-owned standard-library-only Python companion under `/usr/local/libexec/`. They never import service-user-owned application code.
+
 - `service-status`
 - `nginx-test`, `nginx-reload`, `nginx-site-check`, `nginx-site-install`, `nginx-site-remove`
 - `dashboard-site-check`, `dashboard-site-install`, `dashboard-site-remove`
@@ -72,6 +74,10 @@ External TLS paths are also allowed under `/etc/ssl/vps-deployer/<project>/`, wi
 Project Nginx edits may tune request sizes and proxy timeouts. The API preserves routing/TLS declarations and the helper independently enforces its directive allowlist. Failed production test/reload restores the old site. Local development validates config without invoking Nginx.
 
 ## Secrets
+
+Host-wide administration in 0.5.0 extends the panel's authority beyond deployed projects: it can change eligible configs under `/etc/nginx` and start/stop/restart existing non-protected system services. Treat dashboard access as host administration access. Config resolution rejects traversal, symlinks outside `/etc/nginx`, certificate/key file extensions and oversized files. Edits preserve non-allowlisted directives, including includes, log destinations, certificate paths and modules; newly supplied document roots are confined to `/var/www` or `/srv` and new upstreams to loopback TCP addresses. Nginx syntax validation alone is not treated as a privilege boundary.
+
+Nginx changes use a shared lock, optimistic revision check and root-only backups. Failed checks/reloads restore files. Host mutation routes reject cross-origin Origin headers. Disruptive UI actions require typing the target name. SSH, Nginx, networking, systemd and container-manager services are protected from generic service controls, including aliases resolved through systemd. Raw process arguments and environments are not returned; unmanaged PIDs are not killed directly. Backups can contain original config secrets and must remain root-only.
 
 Store secrets in `/etc/vps-deployer/` with mode `600` or `640` for the `vps-deployer` group. `config.env` is `640` so the installing admin can run the CLI. GitHub App keys stay `600`.
 

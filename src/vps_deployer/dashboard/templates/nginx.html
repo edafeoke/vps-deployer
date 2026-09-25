@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero">
+  <p class="stamp">Host inventory / web traffic</p><h1>Nginx</h1>
+  <p>Every discovered configuration on this VPS, including sites created outside VPS Deployer.</p>
+</section>
+<section class="host-health">
+  <div><span class="pill {{ 'pass' if inventory.test.ok == true else 'fail' if inventory.test.ok == false else 'warn' }}">{{ 'Config passes' if inventory.test.ok == true else 'Config has errors' if inventory.test.ok == false else 'Not verified' }}</span>
+  <p class="muted">Validation covers the complete active configuration. Disabled files are not certified by a passing test.</p></div>
+  <div class="actions">
+    <form method="post" action="/nginx/action"><button name="action" value="test">Test configuration</button></form>
+    <form method="post" action="/nginx/action"><button class="ghost" name="action" value="reload" data-confirm="Test and reload Nginx for all sites on this VPS?">Reload Nginx</button></form>
+  </div>
+</section>
+{% if inventory.test.detail %}<details><summary>Validation output</summary><pre class="log">{{ inventory.test.detail }}</pre></details>{% endif %}
+<section>
+  <div class="section-head"><h2>Configuration files <span class="muted">{{ inventory.configs|length }}</span></h2>
+    <label class="search-label">Filter configs<input type="search" data-filter="nginx-rows" placeholder="Domain, file or ownership…" /></label></div>
+  <div class="table-scroll"><table>
+    <thead><tr><th>Config / hostnames</th><th>State</th><th>Validation</th><th>Ownership</th><th>Target</th></tr></thead>
+    <tbody id="nginx-rows">
+    {% for row in inventory.configs %}
+      <tr data-filter-row>
+        <td><a href="{{ row.url }}"><strong>{{ row.id }}</strong></a><div class="muted">{{ row.domains|join(', ') or 'Global / shared config' }}</div>{% if row.error %}<div class="fail">{{ row.error }}</div>{% endif %}</td>
+        <td>{{ 'Enabled' if row.enabled else 'Disabled / shared' }}</td>
+        <td><span class="pill {{ 'pass' if row.status == 'ok' else 'fail' if row.status == 'error' else 'warn' }}">{{ row.status }}</span></td>
+        <td>{% if row.project %}<a href="/projects/{{ row.project }}">{{ row.project }}</a><div class="muted">Deployed project</div>{% elif row.imported %}{{ row.imported }}<div class="muted">Imported app</div>{% else %}<span class="muted">Unmanaged</span>{% endif %}</td>
+        <td class="path">{{ (row.upstreams + row.roots)|join(', ') or '—' }}</td>
+      </tr>
+    {% else %}<tr><td colspan="5" class="empty">No configuration files found. Check the validation output and helper installation.</td></tr>{% endfor %}
+    </tbody>
+  </table></div>
+</section>
+{% endblock %}

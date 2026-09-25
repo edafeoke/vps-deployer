@@ -24,6 +24,12 @@ Interactive docs on the VPS: `http://127.0.0.1:5100/docs`.
 | GET | `/health` |
 | GET | `/api/status` |
 | GET | `/api/system/doctor` |
+| GET | `/api/host/nginx` |
+| GET | `/api/host/nginx/config?config=sites-available/example` |
+| POST | `/api/host/nginx/action` |
+| GET | `/api/host/services` |
+| POST | `/api/host/services/action` |
+| POST | `/api/host/import` |
 | GET | `/api/projects` |
 | POST | `/api/projects` |
 | GET | `/api/projects/{project}` |
@@ -54,6 +60,10 @@ Interactive docs on the VPS: `http://127.0.0.1:5100/docs`.
 | POST | `/api/github/webhook` |
 
 There is no `POST /execute` and no arbitrary shell endpoint.
+
+Host Nginx actions take `{"id":"sites-available/example","revision":"<hash from GET>","action":"save-reload","content":"..."}`. Supported actions are `test`, `reload`, `save`, `save-reload`, `enable`, `disable`, `delete`. Test/reload are global and need no file/revision. Disable/delete require `confirm` equal to `id`. Changes to deployed-project configs use the existing project validation/persistence path. Backups and action results are returned; stale/invalid operations return 422.
+
+Service actions take `{"unit":"example.service","action":"stop","confirm":"example.service"}`; start/stop/restart are supported and stop/restart require matching confirmation. Critical infrastructure units are rejected by the helper. Import takes `{"config":"sites-available/example","name":"existing-app","unit":"example.service"}`; omit `unit` for a static site. These routes require the same public dashboard authentication and reject cross-origin mutation requests.
 
 `GET .../nginx` returns the installed `content`, `path`, `installed`, `custom`, deployment paths, roots, upstreams, and TLS file paths. `PUT` takes `{"content":"..."}`, validates and applies the site, and persists the override. `DELETE` restores generated config. The existing `POST` reapplies saved custom or generated config.
 

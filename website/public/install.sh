@@ -164,7 +164,7 @@ resolve_source() {
     version="$(printf '%s' "$version" | tr -d '[:space:]')"
   fi
   if [[ -z "$version" ]]; then
-    version="0.4.0"
+    version="0.5.0"
   fi
   if ! vd_validate_semver "$version"; then
     echo "Invalid version: ${version}" >&2
@@ -432,6 +432,9 @@ snapshot_existing() {
   if [[ -x /usr/local/libexec/vps-deployer-helper ]]; then
     cp -a /usr/local/libexec/vps-deployer-helper "$staging/libexec/"
   fi
+  if [[ -f /usr/local/libexec/vps-deployer-admin.py ]]; then
+    cp -a /usr/local/libexec/vps-deployer-admin.py "$staging/libexec/"
+  fi
   if [[ -f /etc/systemd/system/vps-deployer.service ]]; then
     cp -a /etc/systemd/system/vps-deployer.service "$staging/vps-deployer.service"
   fi
@@ -456,6 +459,9 @@ restore_previous_install() {
   fi
   if [[ -f "${VD_BACKUP}/libexec/vps-deployer-helper" ]]; then
     install -m 0755 "${VD_BACKUP}/libexec/vps-deployer-helper" /usr/local/libexec/vps-deployer-helper
+  fi
+  if [[ -f "${VD_BACKUP}/libexec/vps-deployer-admin.py" ]]; then
+    install -o root -g root -m 0644 "${VD_BACKUP}/libexec/vps-deployer-admin.py" /usr/local/libexec/vps-deployer-admin.py
   fi
   if [[ -f "${VD_BACKUP}/vps-deployer.service" ]]; then
     install -m 0644 "${VD_BACKUP}/vps-deployer.service" /etc/systemd/system/vps-deployer.service
@@ -514,6 +520,7 @@ install_application() {
 
   install -m 0755 "${VD_SOURCE}/packaging/bin/vps-deployer" /usr/local/bin/vps-deployer
   install -m 0755 "${VD_SOURCE}/packaging/helper/vps-deployer-helper" /usr/local/libexec/vps-deployer-helper
+  install -o root -g root -m 0644 "${VD_SOURCE}/src/vps_deployer/core/host_admin.py" /usr/local/libexec/vps-deployer-admin.py
   install -m 0644 "${VD_SOURCE}/packaging/systemd/vps-deployer.service" /etc/systemd/system/vps-deployer.service
   if [[ -f "${VD_SOURCE}/packaging/sudoers/vps-deployer" ]]; then
     install -m 0440 "${VD_SOURCE}/packaging/sudoers/vps-deployer" /etc/sudoers.d/vps-deployer.tmp

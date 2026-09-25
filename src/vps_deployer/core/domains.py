@@ -53,6 +53,11 @@ def claimed_hostnames(
             continue
         if project.domain:
             claimed.add(project.domain)
+    from vps_deployer.core.host import imported_apps
+
+    for app in imported_apps(settings):
+        if not app.get("deleted"):
+            claimed.update(app.get("domains", []))
     return claimed
 
 

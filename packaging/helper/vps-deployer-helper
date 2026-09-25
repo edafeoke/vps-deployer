@@ -8,6 +8,11 @@ usage() {
 Usage: vps-deployer-helper <action> [args]
 
 Allowed actions:
+  host-nginx-inventory
+  host-nginx-read (JSON stdin)
+  host-nginx-action (JSON stdin)
+  host-service-inventory
+  host-service-action (JSON stdin)
   service-status <unit>
   nginx-test
   app-start <project>
@@ -634,6 +639,10 @@ if [[ -z "$action" ]]; then
 fi
 
 case "$action" in
+  host-nginx-inventory | host-nginx-read | host-nginx-action | host-service-inventory | host-service-action)
+    [[ $# -eq 1 ]] || reject "unexpected host action arguments"
+    exec /usr/bin/python3 -I /usr/local/libexec/vps-deployer-admin.py "$action"
+    ;;
   service-status)
     unit="${2:-}"
     validate_platform_unit "$unit"

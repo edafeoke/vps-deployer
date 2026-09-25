@@ -103,6 +103,8 @@ The public website is docs and the installer only. It does not register your VPS
 
 Project pages show deployment paths, installed Nginx config, and SSL certificate/key paths. Edit request limits and proxy timeouts from the panel or terminal; saved config survives deployments. Existing certificates, including Cloudflare Origin CA, can be configured through either interface. See the [Nginx guide](website/content/docs/nginx.md), [SSL setup](website/content/docs/ssl.md), and [changelog](CHANGELOG.md).
 
+The **Nginx** menu discovers managed and unmanaged configs across `/etc/nginx`, with validation, edit/save/reload and website enable/disable/delete controls. **Services & processes** shows systemd services and processes, their listeners and associated Nginx configs. Existing websites can be imported in place from their config page; they then appear in Projects and Services without moving files or creating Git releases.
+
 ## Documentation
 
 - [Architecture](ARCHITECTURE.md)

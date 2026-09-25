@@ -120,6 +120,7 @@ def collect_uninstall_targets(
     files = [
         current.cli,
         current.helper,
+        current.libexec / "vps-deployer-admin.py",
         current.sudoers,
         current.platform_unit,
         *_dashboard_sites(current),

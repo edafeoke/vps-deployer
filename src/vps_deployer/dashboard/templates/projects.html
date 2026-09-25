@@ -6,6 +6,7 @@
 </section>
 <section>
   <h2>Add a project</h2>
+  <p class="muted">Already running an app on this VPS? <a href="/nginx">Find its Nginx config and import it in place →</a></p>
   <form class="stack" method="post" action="/projects">
     <label>
       Name
@@ -64,4 +65,8 @@
   <p class="empty">No projects yet.</p>
   {% endif %}
 </section>
+{% if imported_apps %}
+<section><h2>Imported applications</h2><p class="muted">Existing installations adopted in place; managed without Git release deployments.</p>
+<ul class="cards">{% for app in imported_apps %}<li><strong>{{ app.name }}</strong><p>{{ app.unit or 'Static website' }} · {{ app.domains|join(', ') }}</p>{% if not app.deleted %}<a href="/nginx/config?config={{ app.config_id|urlencode }}">Open Nginx config</a>{% else %}<span class="muted">Config deleted; app files retained</span>{% endif %}<a href="/services">Services &amp; processes →</a></li>{% endfor %}</ul></section>
+{% endif %}
 {% endblock %}
