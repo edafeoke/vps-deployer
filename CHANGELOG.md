@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.0 — 2026-09-25
+
+- Refresh the public documentation site with a shadcn-inspired dark console theme: semantic color tokens, amber primary actions, rounded cards, stronger navigation, sticky docs navigation, terminal code blocks and responsive mobile layout.
+- Bump the package, installer and public release archive to 0.7.0 so users can install the authenticated panel and theme updates.
+
 ## 0.6.0 — 2026-09-25
 
 - External SSL now accepts existing absolute source paths and automatically copies validated PEM files directly into `/etc/ssl/vps-deployer/<project>/`. Copies use unique filenames, root ownership and private-key mode 600; sources and previously active pairs are preserved.

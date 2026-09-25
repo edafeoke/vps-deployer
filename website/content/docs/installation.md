@@ -12,7 +12,7 @@ curl -fsSL https://vps-deployer.onebitstack.com/install.sh | sudo bash
 Pin a version:
 
 ```bash
-curl -fsSL https://vps-deployer.onebitstack.com/install.sh | sudo bash -s -- --version 0.6.0
+curl -fsSL https://vps-deployer.onebitstack.com/install.sh | sudo bash -s -- --version 0.7.0
 ```
 
 Install from a local checkout:

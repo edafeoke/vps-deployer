@@ -45,7 +45,7 @@ vps-deployer nginx handover replacement --config sites-available/old-app --servi
 vps-deployer rollback my-next-app
 sudo vps-deployer update
 sudo vps-deployer update --yes
-sudo vps-deployer update --version 0.6.0
+sudo vps-deployer update --version 0.7.0
 sudo vps-deployer update --source /path/to/vps-deployer
 sudo vps-deployer update --force
 vps-deployer uninstall
