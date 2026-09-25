@@ -34,7 +34,7 @@ On an unmanaged site's editor, choose **Import into VPS Deployer**, enter a uniq
 
 Importing provides operational management without changing traffic. When ready to move to Git releases, use the replacement handover below. Sites managed by another tool may still be rewritten by that tool; importing does not disable it.
 
-Local development uses `VPS_DEPLOYER_NGINX_DIR` and labels validation unverified. It simulates host config changes and keeps backups under the local data directory without testing/reloading a real Nginx daemon. Stopping old services during handover requires production systemd. Production requires the 0.6.0 helper installed by the normal updater.
+Local development uses `VPS_DEPLOYER_NGINX_DIR` and labels validation unverified. It simulates host config changes and keeps backups under the local data directory without testing/reloading a real Nginx daemon. Stopping old services during handover requires production systemd. Production requires the 0.7.0 helper installed by the normal updater.
 
 ## Deploy a replacement and transfer the website
 

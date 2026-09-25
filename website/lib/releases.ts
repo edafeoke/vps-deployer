@@ -7,6 +7,13 @@ export type Release = {
 
 export const releases: Release[] = [
   {
+    version: "0.7.0",
+    date: "2026-09-25",
+    title: "Console theme and authenticated panel",
+    summary:
+      "Refresh the public documentation site with the shadcn-inspired console theme, lock local and public panel access behind the dashboard password, and invalidate existing sessions when passwords change.",
+  },
+  {
     version: "0.6.0",
     date: "2026-09-25",
     title: "Certificate import and website handover",
