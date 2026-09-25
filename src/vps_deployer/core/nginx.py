@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from vps_deployer.core.config import Settings, get_settings
 from vps_deployer.core.helper import HelperError, helper_available, require_helper
+from vps_deployer.core.site_config import load_site_config, save_site_config, site_mutation
 from vps_deployer.core.validation import (
     APPS_ROOT,
     PORT_RANGE,
@@ -97,6 +99,8 @@ def render_nginx_site(
     *,
     apps_root: Path | None = None,
     ssl_cert_dir: Path | None = None,
+    certificate: str | None = None,
+    certificate_key: str | None = None,
 ) -> str:
     name = validate_project_name(project.name)
     if not domains:
@@ -106,10 +110,10 @@ def render_nginx_site(
         raise NginxError("Cannot render an nginx site without a hostname")
     root = apps_root or APPS_ROOT
     server_name = " ".join(hostnames)
-    use_ssl = any(domain.ssl_enabled for domain in domains)
+    use_ssl = bool(certificate) or any(domain.ssl_enabled for domain in domains)
     lines = [
         f"# vps-deployer site: {name}",
-        "# Managed by VPS Deployer. Do not edit by hand.",
+        "# Managed by VPS Deployer. Use the dashboard or nginx edit command.",
         "server {",
         "    listen 80;",
         "    listen [::]:80;",
@@ -129,7 +133,7 @@ def render_nginx_site(
         lines.extend(_app_location(project, root))
     lines.append("}")
     if use_ssl:
-        primary = next(domain.hostname for domain in domains if domain.ssl_enabled)
+        primary = next((d.hostname for d in domains if d.ssl_enabled), domains[0].hostname)
         cert_dir = ssl_cert_dir or (LETSENCRYPT_LIVE / primary)
         lines.extend(
             [
@@ -139,8 +143,8 @@ def render_nginx_site(
                 "    listen [::]:443 ssl;",
                 f"    server_name {server_name};",
                 "    client_max_body_size 32m;",
-                f"    ssl_certificate {cert_dir}/fullchain.pem;",
-                f"    ssl_certificate_key {cert_dir}/privkey.pem;",
+                f"    ssl_certificate {certificate or str(cert_dir / 'fullchain.pem')};",
+                f"    ssl_certificate_key {certificate_key or str(cert_dir / 'privkey.pem')};",
                 "    ssl_protocols TLSv1.2 TLSv1.3;",
                 *_app_location(project, root),
                 "}",
@@ -155,10 +159,13 @@ def _local_site_path(settings: Settings, project_name: str) -> Path:
     return settings.nginx_dir / site_filename(project_name)
 
 
+@site_mutation
 def apply_project_nginx(
     project: Project,
     domains: list[Domain],
     settings: Settings | None = None,
+    *,
+    state: dict[str, str] | None = None,
 ) -> dict[str, object]:
     current = settings or get_settings()
     name = validate_project_name(project.name)
@@ -173,17 +180,33 @@ def apply_project_nginx(
             ssl_cert_dir = certificate_directory(primary, current)
         else:
             ssl_cert_dir = LETSENCRYPT_LIVE / primary
-    config = render_nginx_site(project, domains, apps_root=apps_root, ssl_cert_dir=ssl_cert_dir)
+    selected = load_site_config(name, current) if state is None else state
+    config = selected.get("custom") or render_nginx_site(
+        project,
+        domains,
+        apps_root=apps_root,
+        ssl_cert_dir=ssl_cert_dir,
+        certificate=selected.get("certificate"),
+        certificate_key=selected.get("certificate_key"),
+    )
+    result = install_project_config(project, config, current)
+    result["domains"] = len(domains)
+    return result
+
+
+def install_project_config(project: Project, config: str, current: Settings) -> dict[str, object]:
+    name = validate_project_name(project.name)
     if current.nginx_dir is not None:
         current.nginx_dir.mkdir(parents=True, exist_ok=True)
         path = _local_site_path(current, name)
-        path.write_text(config, encoding="utf-8")
+        temporary = path.with_suffix(".tmp")
+        temporary.write_text(config, encoding="utf-8")
+        temporary.replace(path)
         return {
             "applied": True,
             "mode": "local",
             "path": str(path),
-            "domains": len(domains),
-            "ssl": any(domain.ssl_enabled for domain in domains),
+            "ssl": "ssl_certificate " in config,
         }
     if not helper_available(current):
         raise NginxError("Privileged helper is not installed")
@@ -194,9 +217,165 @@ def apply_project_nginx(
     return {
         "applied": True,
         "mode": "helper",
-        "domains": len(domains),
-        "ssl": any(domain.ssl_enabled for domain in domains),
+        "ssl": "ssl_certificate " in config,
     }
+
+
+def nginx_status(project_name: str, settings: Settings | None = None) -> dict[str, object]:
+    from vps_deployer.core.domains import list_domains
+    from vps_deployer.core.projects import get_project
+
+    current = settings or get_settings()
+    project = get_project(project_name, current)
+    domains = list_domains(project.name, current)
+    state = load_site_config(project.name, current)
+    error = None
+    content = ""
+    path = str(_local_site_path(current, project.name)) if current.nginx_dir else None
+    try:
+        if current.nginx_dir is not None:
+            site = _local_site_path(current, project.name)
+            content = site.read_text(encoding="utf-8") if site.exists() else ""
+        elif helper_available(current):
+            result = require_helper("nginx-site-read", project.name, settings=current)
+            path, _, content = result.stdout.partition("\n")
+        else:
+            error = "Privileged helper is not installed"
+    except (OSError, HelperError) as exc:
+        error = str(exc)
+    active = bool(content)
+    if not content and domains:
+        assert current.apps_root is not None
+        primary = next((d.hostname for d in domains if d.ssl_enabled), domains[0].hostname)
+        content = state.get("custom") or render_nginx_site(
+            project,
+            domains,
+            apps_root=current.apps_root,
+            ssl_cert_dir=certificate_directory(primary, current),
+            certificate=state.get("certificate"),
+            certificate_key=state.get("certificate_key"),
+        )
+
+    def directives(key: str) -> list[str]:
+        return re.findall(rf"^\s*{key}\s+([^;]+);\s*$", content, re.MULTILINE)
+
+    deployment = Path(project.deployment_path)
+    return {
+        "project": project.name,
+        "path": path,
+        "content": content,
+        "installed": active,
+        "custom": bool(state.get("custom")),
+        "error": error,
+        "deployment_path": str(deployment),
+        "current_path": str(deployment / "current"),
+        "release_path": str((deployment / "current").resolve())
+        if (deployment / "current").exists()
+        else None,
+        "roots": directives("root"),
+        "upstreams": directives("proxy_pass"),
+        "certificates": directives("ssl_certificate"),
+        "certificate_keys": directives("ssl_certificate_key"),
+    }
+
+
+@site_mutation
+def save_nginx_config(
+    name: str,
+    content: str | None,
+    settings: Settings | None = None,
+) -> dict[str, object]:
+    from vps_deployer.core.domains import list_domains
+    from vps_deployer.core.projects import get_project
+    from vps_deployer.core.validation import ValidationError
+
+    current = settings or get_settings()
+    project = get_project(name, current)
+    domains = list_domains(name, current)
+    if not domains:
+        raise ValidationError("Attach a domain before configuring Nginx")
+    state = load_site_config(name, current)
+    if content is None:
+        state.pop("custom", None)
+    else:
+        # Browsers submit textarea newlines as CRLF; Nginx files use LF.
+        content = content.replace("\r\n", "\n")
+        validate_custom_config(project, domains, content, current)
+        state["custom"] = content
+    apply_project_nginx(project, domains, current, state=state)
+    save_site_config(name, state, current)
+    return nginx_status(name, current)
+
+
+def validate_custom_config(
+    project: Project,
+    domains: list[Domain],
+    content: str,
+    settings: Settings,
+) -> None:
+    """Restrict edits to the generated site's hosts, upstream and certificate paths."""
+    from vps_deployer.core.validation import ValidationError
+
+    if not content.strip() or len(content) > 12000 or any(c in content for c in ("\x00", "\r")):
+        raise ValidationError("Nginx config must contain 1–12000 characters")
+    assert settings.apps_root is not None
+    primary = next((d.hostname for d in domains if d.ssl_enabled), domains[0].hostname)
+    state = load_site_config(project.name, settings)
+    generated = render_nginx_site(
+        project,
+        domains,
+        apps_root=settings.apps_root,
+        ssl_cert_dir=certificate_directory(primary, settings),
+        certificate=state.get("certificate"),
+        certificate_key=state.get("certificate_key"),
+    )
+    allowed = {line.strip() for line in generated.splitlines() if line.strip()}
+    stack: list[str] = []
+    for line in content.splitlines():
+        stripped = line.strip()
+        if len(line) > 500:
+            raise ValidationError("Nginx lines must not exceed 500 characters")
+        if not stripped or stripped.startswith("#"):
+            continue
+        if stripped not in allowed and not re.fullmatch(
+            r"(?:client_max_body_size [1-9][0-9]{0,3}[mk]|"
+            r"(?:proxy_read_timeout|proxy_connect_timeout|proxy_send_timeout) [1-9][0-9]{0,3}s);",
+            stripped,
+        ):
+            raise ValidationError(f"Unsupported Nginx directive: {stripped}")
+        if stripped == "server {":
+            if stack:
+                raise ValidationError("Server blocks cannot be nested")
+            stack.append("server")
+        elif stripped.startswith("location "):
+            if stack != ["server"]:
+                raise ValidationError("Locations must be inside a server block")
+            stack.append("location")
+        elif stripped == "}":
+            if not stack:
+                raise ValidationError("Unbalanced Nginx braces")
+            stack.pop()
+        elif not stack:
+            raise ValidationError("Directives must be inside a server block")
+    if stack or f"# vps-deployer site: {project.name}" not in content.splitlines():
+        raise ValidationError("Unbalanced Nginx braces or missing project marker")
+    # Keep routing/TLS declarations intact; edits tune request limits and proxy timeouts.
+    for directive in (
+        "listen",
+        "server_name",
+        "root",
+        "proxy_pass",
+        "ssl_certificate",
+        "ssl_certificate_key",
+        "ssl_protocols",
+    ):
+        pattern = rf"^\s*{directive}\s+[^;]+;\s*$"
+        expected = sorted(s.strip() for s in re.findall(pattern, generated, re.MULTILINE))
+        actual = sorted(s.strip() for s in re.findall(pattern, content, re.MULTILINE))
+        if expected != actual:
+            raise ValidationError(
+                f"Keep generated {directive} declarations; use domains/SSL controls"
+            )
 
 
 def remove_project_nginx(project: Project, settings: Settings | None = None) -> dict[str, object]:

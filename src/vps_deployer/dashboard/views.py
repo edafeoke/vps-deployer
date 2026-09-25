@@ -19,6 +19,7 @@ from vps_deployer.core.github import (
     github_status,
     list_accessible_repositories,
 )
+from vps_deployer.core.nginx import nginx_status
 from vps_deployer.core.projects import get_project, list_projects, project_payload
 from vps_deployer.core.services import project_service_status
 from vps_deployer.core.ssl import ssl_status
@@ -27,6 +28,8 @@ from vps_deployer.core.version import get_version
 from vps_deployer.db.session import get_engine
 
 NOTICES = {
+    "nginx_saved": "Nginx config saved. Custom edits persist across deployments.",
+    "nginx_reset": "Generated Nginx config restored.",
     "created": "Project created on this VPS.",
     "deployed": "Deployment queued on this VPS.",
     "rolled_back": "Rollback finished on this VPS.",
@@ -143,6 +146,7 @@ def project_context(
             "deployments": deployments,
             "domains": domains,
             "ssl": ssl_status(project.name, current),
+            "nginx": nginx_status(project.name, current),
             "service": project_service_status(project.name, current),
             "logs": logs,
             "active": any(

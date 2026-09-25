@@ -32,7 +32,7 @@ from vps_deployer.core.github import (
     configure_github,
     set_github_installation,
 )
-from vps_deployer.core.nginx import NginxError
+from vps_deployer.core.nginx import NginxError, save_nginx_config
 from vps_deployer.core.projects import (
     ProjectConflictError,
     ProjectCreate,
@@ -42,7 +42,7 @@ from vps_deployer.core.projects import (
 )
 from vps_deployer.core.rollback import RollbackError, rollback_project
 from vps_deployer.core.services import ServiceError, restart_project, start_project, stop_project
-from vps_deployer.core.ssl import SslError, enable_ssl
+from vps_deployer.core.ssl import SslError, enable_external_ssl, enable_ssl
 from vps_deployer.core.validation import ValidationError
 from vps_deployer.dashboard import STATIC_DIR, TEMPLATE_DIR
 from vps_deployer.dashboard.views import (
@@ -266,6 +266,7 @@ def dashboard_add_domain(
         ProjectConflictError,
         NginxError,
         ValueError,
+        SslError,
     ) as exc:
         return _redirect(f"/projects/{name}", error=_form_error(exc))
     return _redirect(f"/projects/{name}", notice="domain_added")
@@ -285,6 +286,37 @@ def dashboard_enable_ssl(
         NginxError,
         SslError,
     ) as exc:
+        return _redirect(f"/projects/{name}", error=_form_error(exc))
+    return _redirect(f"/projects/{name}", notice="ssl_enabled")
+
+
+@router.post("/projects/{name}/nginx")
+def dashboard_save_nginx(name: str, content: Annotated[str, Form()]) -> RedirectResponse:
+    try:
+        save_nginx_config(name, content, get_settings())
+    except (ValidationError, ProjectNotFoundError, NginxError) as exc:
+        return _redirect(f"/projects/{name}", error=_form_error(exc))
+    return _redirect(f"/projects/{name}", notice="nginx_saved")
+
+
+@router.post("/projects/{name}/nginx/reset")
+def dashboard_reset_nginx(name: str) -> RedirectResponse:
+    try:
+        save_nginx_config(name, None, get_settings())
+    except (ValidationError, ProjectNotFoundError, NginxError) as exc:
+        return _redirect(f"/projects/{name}", error=_form_error(exc))
+    return _redirect(f"/projects/{name}", notice="nginx_reset")
+
+
+@router.post("/projects/{name}/ssl/external")
+def dashboard_external_ssl(
+    name: str,
+    certificate: Annotated[str, Form()],
+    certificate_key: Annotated[str, Form()],
+) -> RedirectResponse:
+    try:
+        enable_external_ssl(name, certificate.strip(), certificate_key.strip(), get_settings())
+    except (ValidationError, ProjectNotFoundError, NginxError, SslError) as exc:
         return _redirect(f"/projects/{name}", error=_form_error(exc))
     return _redirect(f"/projects/{name}", notice="ssl_enabled")
 

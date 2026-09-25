@@ -7,6 +7,7 @@ from sqlmodel import Session, select
 from vps_deployer.core.config import Settings, get_settings
 from vps_deployer.core.nginx import NginxError, apply_project_nginx, remove_project_nginx
 from vps_deployer.core.projects import ProjectConflictError, get_project
+from vps_deployer.core.site_config import site_mutation
 from vps_deployer.core.validation import validate_domain, validate_project_name
 from vps_deployer.db.models import Domain, Project
 from vps_deployer.db.session import get_engine, init_db
@@ -87,6 +88,7 @@ def list_domains(project_name: str, settings: Settings | None = None) -> list[Do
         return rows
 
 
+@site_mutation
 def add_domain(
     project_name: str,
     hostname: str,
@@ -96,6 +98,23 @@ def add_domain(
 ) -> Domain:
     current = settings or get_settings()
     project = get_project(validate_project_name(project_name), current)
+    from vps_deployer.core.site_config import load_site_config, require_generated_site
+
+    require_generated_site(project.name, current)
+    state = load_site_config(project.name, current)
+    if state.get("provider") == "external":
+        from vps_deployer.core.ssl import validate_external_certificate
+
+        names = [validate_domain(hostname)]
+        if www:
+            names.append(f"www.{names[0]}")
+        validate_external_certificate(
+            project.name,
+            state["certificate"],
+            state["certificate_key"],
+            names,
+            current,
+        )
     if www and hostname.strip().lower().startswith("www."):
         raise ValueError("Do not enable www on a hostname that already starts with www.")
     name = assert_hostname_available(hostname, current, www=www, exclude_project_id=None)
@@ -106,7 +125,12 @@ def add_domain(
         ).first()
         if existing is not None:
             raise DomainConflictError(f"Domain already attached: {name}")
-        row = Domain(project_id=project.id, hostname=name, www_enabled=www, ssl_enabled=False)
+        row = Domain(
+            project_id=project.id,
+            hostname=name,
+            www_enabled=www,
+            ssl_enabled=state.get("provider") == "external",
+        )
         session.add(row)
         stored = session.get(Project, project.id)
         if stored is not None and stored.domain is None:
@@ -124,6 +148,7 @@ def add_domain(
     return row
 
 
+@site_mutation
 def remove_domain(
     project_name: str,
     hostname: str,
@@ -131,6 +156,9 @@ def remove_domain(
 ) -> None:
     current = settings or get_settings()
     project = get_project(validate_project_name(project_name), current)
+    from vps_deployer.core.site_config import require_generated_site
+
+    require_generated_site(project.name, current)
     name = validate_domain(hostname)
     assert project.id is not None
     with _session(current) as session:

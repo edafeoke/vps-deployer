@@ -41,8 +41,12 @@ Interactive docs on the VPS: `http://127.0.0.1:5100/docs`.
 | POST | `/api/projects/{project}/domains` |
 | DELETE | `/api/projects/{project}/domains/{hostname}` |
 | POST | `/api/projects/{project}/nginx` |
+| GET | `/api/projects/{project}/nginx` |
+| PUT | `/api/projects/{project}/nginx` |
+| DELETE | `/api/projects/{project}/nginx` |
 | GET | `/api/projects/{project}/ssl` |
 | POST | `/api/projects/{project}/ssl` |
+| POST | `/api/projects/{project}/ssl/external` |
 | POST | `/api/ssl/renew` |
 | GET | `/api/github/status` |
 | POST | `/api/github/configure` |
@@ -50,3 +54,7 @@ Interactive docs on the VPS: `http://127.0.0.1:5100/docs`.
 | POST | `/api/github/webhook` |
 
 There is no `POST /execute` and no arbitrary shell endpoint.
+
+`GET .../nginx` returns the installed `content`, `path`, `installed`, `custom`, deployment paths, roots, upstreams, and TLS file paths. `PUT` takes `{"content":"..."}`, validates and applies the site, and persists the override. `DELETE` restores generated config. The existing `POST` reapplies saved custom or generated config.
+
+`POST .../ssl/external` takes `{"certificate":"/etc/ssl/vps-deployer/my-next-app/origin.pem","certificate_key":"/etc/ssl/vps-deployer/my-next-app/origin.key"}`. `GET .../ssl` includes `provider`, `certificate`, and `certificate_key` paths. Validation errors return 422; missing domains return 409, missing projects 404, and Nginx application failures 502. These routes share the dashboard's authentication boundary.

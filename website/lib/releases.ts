@@ -7,6 +7,13 @@ export type Release = {
 
 export const releases: Release[] = [
   {
+    version: "0.4.0",
+    date: "2026-09-25",
+    title: "Nginx editor and external SSL",
+    summary:
+      "Inspect deployment and TLS paths, edit project Nginx config from the dashboard or CLI, preserve custom settings across deployments, restore sites after failed Nginx tests/reloads, and use existing certificates including Cloudflare Origin CA.",
+  },
+  {
     version: "0.3.6",
     date: "2026-09-21",
     title: "SSL state ownership",

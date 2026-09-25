@@ -213,3 +213,52 @@ def test_cli_start_stop_static(tmp_env, client: TestClient, monkeypatch) -> None
     assert "no process" in started.stdout
     stopped = runner.invoke(app, ["stop", "my-site"])
     assert stopped.exit_code == 0, stopped.output
+
+
+def test_cli_nginx_roundtrip(tmp_env, client: TestClient, monkeypatch) -> None:
+    monkeypatch.setattr("vps_deployer.cli.main.api_request", _proxy_api(client))
+    client.post(
+        "/api/projects",
+        json={
+            "name": "my-app",
+            "repository": "example/my-app",
+            "domain": "example.com",
+        },
+    )
+    shown = runner.invoke(app, ["nginx", "show", "my-app", "--raw"])
+    assert shown.exit_code == 0, shown.output
+    assert "listen [::]:80;" in shown.stdout
+    assert shown.stdout == client.get("/api/projects/my-app/nginx").json()["content"]
+    edited = shown.stdout.replace("32m;", "64m;")
+    monkeypatch.setattr("vps_deployer.cli.main.click.edit", lambda *a, **kw: edited)
+    assert runner.invoke(app, ["nginx", "edit", "my-app"]).exit_code == 0
+    assert client.get("/api/projects/my-app/nginx").json()["content"] == edited
+    file = tmp_env / "site.conf"
+    file.write_text(edited.replace("64m;", "96m;"))
+    assert runner.invoke(app, ["nginx", "apply", "my-app", "--file", str(file)]).exit_code == 0
+    assert "96m;" in client.get("/api/projects/my-app/nginx").json()["content"]
+    assert runner.invoke(app, ["nginx", "reset", "my-app", "--yes"]).exit_code == 0
+    assert client.get("/api/projects/my-app/nginx").json()["content"] == shown.stdout
+
+
+def test_cli_external_ssl(client, tmp_env, monkeypatch) -> None:
+    from test_site_config import certificate_files, create_site
+
+    monkeypatch.setattr("vps_deployer.cli.main.api_request", _proxy_api(client))
+    create_site(client)
+    files = certificate_files(tmp_env)
+    result = runner.invoke(
+        app,
+        [
+            "ssl",
+            "external",
+            "my-app",
+            "--certificate",
+            files["certificate"],
+            "--key",
+            files["certificate_key"],
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "External HTTPS enabled" in result.output
+    assert "PRIVATE KEY" not in result.output

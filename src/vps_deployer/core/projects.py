@@ -187,8 +187,10 @@ def delete_project(name: str, settings: Settings | None = None) -> None:
     try:
         from vps_deployer.core.nginx import remove_project_nginx
         from vps_deployer.core.runtime import get_runtime
+        from vps_deployer.core.site_config import state_path
 
         remove_project_nginx(project, settings)
         get_runtime(settings).remove(project)
+        state_path(validated, settings or get_settings()).unlink(missing_ok=True)
     except Exception:
         pass

@@ -80,6 +80,9 @@ vps-deployer domain remove my-next-app example.com
 vps-deployer ssl enable my-next-app --email ops@example.com
 vps-deployer ssl status my-next-app
 vps-deployer ssl renew
+vps-deployer nginx show my-next-app
+vps-deployer nginx edit my-next-app
+vps-deployer ssl external my-next-app --certificate /etc/ssl/vps-deployer/my-next-app/origin.pem --key /etc/ssl/vps-deployer/my-next-app/origin.key
 vps-deployer rollback my-next-app
 vps-deployer dashboard
 ```
@@ -97,6 +100,8 @@ After publishing a hostname and enabling HTTPS, open **Settings** and select
 read-only repository permission, private key, and webhook secret automatically.
 
 The public website is docs and the installer only. It does not register your VPS.
+
+Project pages show deployment paths, installed Nginx config, and SSL certificate/key paths. Edit request limits and proxy timeouts from the panel or terminal; saved config survives deployments. Existing certificates, including Cloudflare Origin CA, can be configured through either interface. See the [Nginx guide](website/content/docs/nginx.md), [SSL setup](website/content/docs/ssl.md), and [changelog](CHANGELOG.md).
 
 ## Documentation
 

@@ -107,6 +107,44 @@
   </form>
 </section>
 <section>
+  <h2>Nginx configuration</h2>
+  <p class="muted">{{ "Custom config" if nginx.custom else "Generated config" }} · {{ "Installed" if nginx.installed else "Preview — not installed" }}</p>
+  {% if nginx.error %}<p class="fail">{{ nginx.error }}</p>{% endif %}
+  <dl>
+    <dt>Site file</dt><dd class="path">{{ nginx.path or "Unavailable" }}</dd>
+    <dt>Current deployment</dt><dd class="path">{{ nginx.current_path }}</dd>
+    <dt>Resolved release</dt><dd class="path">{{ nginx.release_path or "Not deployed yet" }}</dd>
+    <dt>Web roots</dt><dd class="path">{{ nginx.roots|join(", ") or "Reverse proxy" }}</dd>
+    <dt>Upstreams</dt><dd class="path">{{ nginx.upstreams|join(", ") or "Static files" }}</dd>
+    <dt>SSL provider</dt><dd>{{ ssl.provider }}</dd>
+    <dt>Certificate files</dt><dd class="path">{{ nginx.certificates|join(", ") or "None" }}</dd>
+    <dt>Private key files</dt><dd class="path">{{ nginx.certificate_keys|join(", ") or "None" }}</dd>
+  </dl>
+  {% if nginx.content %}
+  <p class="muted">Tune request size and proxy timeouts below. Routing and TLS declarations stay tied to the domains/SSL controls. Reset custom config before changing domains or SSL.</p>
+  <form class="stack" method="post" action="/projects/{{ project.name }}/nginx">
+    <label for="nginx-config">Site configuration</label>
+    <textarea id="nginx-config" name="content" rows="22" maxlength="12000" spellcheck="false" required data-prevent-refresh>{{ nginx.content }}</textarea>
+    <button type="submit">Save and apply Nginx config</button>
+  </form>
+  {% if nginx.custom %}
+  <form method="post" action="/projects/{{ project.name }}/nginx/reset">
+    <button type="submit" class="ghost" data-confirm="Discard custom Nginx edits and restore the generated config?">Reset to generated config</button>
+  </form>
+  {% endif %}
+  {% endif %}
+</section>
+<section>
+  <h2>External SSL / Cloudflare Origin CA</h2>
+  <p>Use certificate and private key files already installed on this VPS under <code>/etc/ssl/vps-deployer/{{ project.name }}/</code>. The certificate must cover every attached hostname, including www.</p>
+  <p class="muted">For Cloudflare Origin CA, enable proxied DNS and Full (strict). External certificates are renewed by you, not Certbot.</p>
+  <form class="stack" method="post" action="/projects/{{ project.name }}/ssl/external">
+    <label>Certificate path<input name="certificate" required placeholder="/etc/ssl/vps-deployer/{{ project.name }}/origin.pem" value="{{ ssl.certificate if ssl.provider == 'external' else '' }}" /></label>
+    <label>Private key path<input name="certificate_key" required placeholder="/etc/ssl/vps-deployer/{{ project.name }}/origin.key" value="{{ ssl.certificate_key if ssl.provider == 'external' else '' }}" /></label>
+    <button type="submit">Use external certificate</button>
+  </form>
+</section>
+<section>
   <h2>Latest deployment log</h2>
   {% if logs %}
   <pre class="log">{% for line in logs %}{{ line }}
