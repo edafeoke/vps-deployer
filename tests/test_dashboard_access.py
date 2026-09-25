@@ -57,8 +57,9 @@ def test_public_host_requires_login(tmp_env: Path, client: TestClient) -> None:
         password="secretpass",
         settings=get_settings(),
     )
-    local = client.get("/")
-    assert local.status_code == 200
+    local = client.get("/", follow_redirects=False)
+    assert local.status_code == 303
+    assert "/login" in local.headers["location"]
     blocked = client.get("/", headers={"Host": "panel.example.com"}, follow_redirects=False)
     assert blocked.status_code == 303
     assert "/login" in blocked.headers["location"]
@@ -74,6 +75,13 @@ def test_public_host_requires_login(tmp_env: Path, client: TestClient) -> None:
     opened = client.get("/", headers={"Host": "panel.example.com"})
     assert opened.status_code == 200
     assert "This VPS" in opened.text
+    local_login = client.post(
+        "/login",
+        data={"password": "secretpass", "next": "/"},
+        follow_redirects=False,
+    )
+    assert local_login.status_code == 303
+    assert client.get("/").status_code == 200
 
 
 def test_public_webhook_still_uses_hmac(tmp_env: Path, client: TestClient) -> None:

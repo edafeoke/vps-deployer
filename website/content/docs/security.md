@@ -4,7 +4,7 @@ summary: Localhost API, a whitelist helper, and no telemetry.
 ---
 
 - The API binds to `127.0.0.1`.
-- Publishing the dashboard on a hostname or the VPS IP is opt-in through nginx and requires a password.
+- Publishing the dashboard on a hostname or the VPS IP is opt-in through nginx and requires a password. Once a password is configured, direct localhost access is protected too; only health, login/logout, static assets, and the authenticated webhook exemption remain public.
 - The FastAPI process does not run as root.
 - Privileged work goes through `/usr/local/libexec/vps-deployer-helper` only.
 - sudoers allows that helper, not `NOPASSWD: ALL`.

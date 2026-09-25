@@ -39,7 +39,7 @@ vps-deployer dashboard enable --host panel.example.com
 vps-deployer dashboard ssl --email ops@example.com
 ```
 
-`enable` publishes the same console through nginx. Public requests require a password. `--ip` uses the VPS public IPv4 address (HTTP only). An SSH tunnel is still optional:
+`enable` publishes the same console through nginx. Dashboard requests—including direct localhost access after a password is configured—require a password. `--ip` uses the VPS public IPv4 address (HTTP only). An SSH tunnel is still optional:
 
 ```bash
 ssh -L 5100:127.0.0.1:5100 user@your-vps
