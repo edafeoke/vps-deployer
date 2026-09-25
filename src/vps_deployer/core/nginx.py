@@ -181,6 +181,8 @@ def apply_project_nginx(
         else:
             ssl_cert_dir = LETSENCRYPT_LIVE / primary
     selected = load_site_config(name, current) if state is None else state
+    if selected.get("disabled"):
+        return {"applied": False, "disabled": True, "domains": len(domains)}
     config = selected.get("custom") or render_nginx_site(
         project,
         domains,
@@ -297,6 +299,7 @@ def save_nginx_config(
     state = load_site_config(name, current)
     if content is None:
         state.pop("custom", None)
+        state.pop("disabled", None)
     else:
         # Browsers submit textarea newlines as CRLF; Nginx files use LF.
         content = content.replace("\r\n", "\n")

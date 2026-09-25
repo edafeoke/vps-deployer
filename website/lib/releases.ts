@@ -7,6 +7,13 @@ export type Release = {
 
 export const releases: Release[] = [
   {
+    version: "0.5.0",
+    date: "2026-09-25",
+    title: "Host-wide Nginx and services",
+    summary:
+      "Discover and edit managed or unmanaged Nginx sites, test and reload with backups, disable or delete websites, inspect services and processes with config links, and import existing apps in place.",
+  },
+  {
     version: "0.4.0",
     date: "2026-09-25",
     title: "Nginx editor and external SSL",

@@ -370,6 +370,10 @@ Local development uses a process runtime (pid file under the project `shared/` d
 
 ## Domains and nginx
 
+The host-wide Nginx inventory/editor and Services & processes menus also discover applications outside the deployment database. Fixed helper actions execute `/usr/bin/python3 -I /usr/local/libexec/vps-deployer-admin.py`, a root-owned standalone copy installed alongside the shell helper. JSON requests never contain executable shell commands. Website edits retain backups under `/var/backups/vps-deployer/nginx`, serialize against project installs and validate the active Nginx configuration before reload.
+
+In-place imports live in `/etc/vps-deployer/imported-apps.json`. They associate an application name with its existing Nginx config and optional systemd unit; they do not create deployment records, move files or stop processes. Git-based deployments remain separate projects. Service/config associations also use discovered TCP/Unix listeners and named upstream groups. Process details intentionally omit arguments/environment values.
+
 Domains are stored on this VPS and written to `vps-deployer-<project>.conf` site files. HTTP (`listen 80`) proxies process apps to `127.0.0.1:<port>` or serves static files from `/var/www/apps/<project>/current`. Optional `www` is an extra `server_name`, not a separate project.
 
 The helper installs, tests (`nginx -t`), and reloads nginx. A failed `nginx -t` rolls back the new site file and leaves other sites untouched.

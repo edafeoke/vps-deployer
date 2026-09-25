@@ -1,7 +1,19 @@
 ---
 title: Projects
-summary: Create, list, and remove applications on this VPS.
+summary: Create, import, inspect and manage applications on this VPS.
 ---
+
+The **Projects** page also lists websites imported from the **Nginx** menu. Importing adopts an existing configuration and optional systemd service in place, preserving its files and running processes. Imported apps have operational controls but do not use Git releases. See [Nginx and importing existing websites](/docs/nginx).
+
+## Services & processes
+
+The **Services & processes** menu lists systemd services (including installed inactive services), process names/PIDs/users, TCP and Unix listeners, working directories and associated Nginx configs. Direct loopback upstreams, named upstream groups and Unix sockets can be correlated with a service; imported apps can also specify an explicit service link. These links are inferred, not proof that a backend is healthy.
+
+Start, stop and restart application services from their **Manage** controls. Stop/restart require typing the exact unit name. Critical infrastructure (SSH, Nginx, networking, systemd, container managers and VPS Deployer itself) is protected; use dedicated settings or SSH for those. Stopping a service does not disable its boot configuration or other activation triggers.
+
+Unsupervised processes and processes managed by Docker, PM2 or user service managers are visible when the host can discover them; this panel does not directly kill PIDs or manage individual containers. Use their owning system service where appropriate, or their native manager. Process arguments and environments are omitted because they can contain credentials. Static websites have a separate list because they need no app process.
+
+## Git-based deployment projects
 
 ```bash
 vps-deployer projects

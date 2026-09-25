@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.0 — 2026-09-25
+
+- Add the Nginx menu with discovered configs, domains, ownership, enablement, and active configuration validation status, including unmanaged websites.
+- Add host config editing with save/test, save/reload, stale-write protection, recoverable backups, and rollback after validation/reload failure. Keep privileged file/module directives unchanged.
+- Add enable, disable, and delete website controls with typed confirmation for disruptive actions. Application files and certificates are retained.
+- Add Services & processes with systemd inventory, process names, TCP/Unix listeners, working directories, and Nginx links, including named upstream matching.
+- Add start/stop/restart controls for application services while protecting critical infrastructure services.
+- Adopt existing websites in place and link an optional service. Imported apps appear in Projects and Services without changing deployment paths or creating Git releases.
+- Install a root-owned standalone host helper launched with isolated system Python; include it in installer backup/rollback and uninstall handling.
+- Preserve manually disabled managed sites across deployments; reset a project's Nginx config to regenerate a deleted/disabled site.
+
 ## 0.4.0 — 2026-09-25
 
 - Show installed Nginx config, app directory, current release, web roots, upstreams, certificate paths, and private key paths in the dashboard and CLI.

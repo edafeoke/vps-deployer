@@ -19,6 +19,7 @@ from vps_deployer.core.github import (
     github_status,
     list_accessible_repositories,
 )
+from vps_deployer.core.host import imported_apps
 from vps_deployer.core.nginx import nginx_status
 from vps_deployer.core.projects import get_project, list_projects, project_payload
 from vps_deployer.core.services import project_service_status
@@ -121,7 +122,14 @@ def projects_context(
         deployments = list_deployments(project.name, current)
         latest = deployment_payload(deployments[0]) if deployments else None
         cards.append({"project": project_payload(project), "latest": latest})
-    payload.update({"page": "projects", "title": "Projects", "projects": cards})
+    payload.update(
+        {
+            "page": "projects",
+            "title": "Projects",
+            "projects": cards,
+            "imported_apps": imported_apps(current),
+        }
+    )
     return payload
 
 

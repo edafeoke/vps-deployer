@@ -30,6 +30,8 @@
     <nav class="nav" aria-label="Dashboard">
       <a href="/" {% if page == "overview" %}aria-current="page"{% endif %}>Overview</a>
       <a href="/projects" {% if page in ["projects", "project"] %}aria-current="page"{% endif %}>Projects</a>
+      <a href="/nginx" {% if page == "nginx" %}aria-current="page"{% endif %}>Nginx</a>
+      <a href="/services" {% if page == "services" %}aria-current="page"{% endif %}>Services &amp; processes</a>
       <a href="/doctor" {% if page == "doctor" %}aria-current="page"{% endif %}>Doctor</a>
       <a href="/settings" {% if page == "settings" %}aria-current="page"{% endif %}>Settings</a>
     </nav>

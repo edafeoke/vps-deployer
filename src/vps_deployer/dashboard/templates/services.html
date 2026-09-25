@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero"><p class="stamp">Host inventory / application runtime</p><h1>Services &amp; processes</h1><p>Systemd services, listening applications and static websites—whether deployed here or installed manually.</p></section>
+{% for error in inventory.errors %}<p class="banner bad">{{ error }}</p>{% endfor %}
+{% if inventory.imports %}
+<section><h2>Imported applications</h2><ul class="cards">
+{% for app in inventory.imports %}<li><strong>{{ app.name }}</strong> <span class="pill">Imported in place</span><p>{{ app.unit or 'Static website' }} · {{ app.domains|join(', ') }}</p>{% if app.deleted %}<p class="muted">Website config deleted; files retained.</p>{% else %}<a href="/nginx/config?config={{ app.config_id|urlencode }}">{{ app.config_id }}</a>{% endif %}</li>{% endfor %}
+</ul></section>{% endif %}
+<section>
+  <div class="section-head"><h2>Services <span class="muted">{{ inventory.services|length }}</span></h2><label class="search-label">Filter services<input type="search" data-filter="service-rows" placeholder="Name, domain, port, state…" /></label></div>
+  <div class="table-scroll"><table><thead><tr><th>Service</th><th>State</th><th>Listeners / directory</th><th>Nginx configurations</th><th>Controls</th></tr></thead><tbody id="service-rows">
+  {% for service in inventory.services %}<tr id="service-{{ service.unit }}" data-filter-row>
+    <td><strong>{{ service.unit }}</strong><div class="muted">{{ service.description }}</div><div>{{ service.user }} · PID {{ service.pid or '—' }}</div>
+    {% if service.project %}<a href="/projects/{{ service.project }}">{{ service.project }}</a>{% elif service.imported %}<span class="pill">Imported: {{ service.imported }}</span>{% else %}<span class="muted">Unmanaged</span>{% endif %}</td>
+    <td><span class="pill {{ 'pass' if service.state == 'active' else 'fail' if service.state == 'failed' else 'warn' }}">{{ service.state }}</span><div class="muted">{{ service.sub }}</div></td>
+    <td class="path">{{ service.listeners|join(', ') or 'No TCP listener' }}<div class="muted">{{ service.working_directory or '—' }}</div></td>
+    <td>{% for config in service.configs %}<a class="config-link" href="{{ config.url }}">{{ config.id }}</a>{% else %}<span class="muted">No match</span>{% endfor %}</td>
+    <td>{% if service.protected %}<span class="muted">Infrastructure · protected</span>{% else %}
+      <details><summary>Manage</summary><form class="service-controls" method="post" action="/services/action">
+        <input type="hidden" name="unit" value="{{ service.unit }}" />
+        <label>Type service name to stop/restart<input name="confirm" placeholder="{{ service.unit }}" autocomplete="off" /></label>
+        <div class="actions"><button name="action" value="start">Start</button><button class="ghost" name="action" value="restart">Restart</button><button class="danger" name="action" value="stop">Stop</button></div>
+      </form></details>{% endif %}</td>
+  </tr>{% else %}<tr><td colspan="5" class="empty">No services discovered. Production inventory requires systemd and the updated helper.</td></tr>{% endfor %}
+  </tbody></table></div>
+</section>
+{% if inventory.static_sites %}<section><h2>Static websites</h2><p class="muted">These sites serve files directly and need no running application service.</p><ul class="plain">{% for config in inventory.static_sites %}<li><a href="{{ config.url }}">{{ config.domains|join(', ') or config.id }}</a> <span class="path">{{ config.roots|join(', ') }}</span></li>{% endfor %}</ul></section>{% endif %}
+<section><div class="section-head"><h2>Processes <span class="muted">{{ inventory.processes|length }}</span></h2><label class="search-label">Filter processes<input type="search" data-filter="process-rows" placeholder="Name, PID, port or user…" /></label></div>
+<p class="muted">Command names only; arguments and environment values are omitted. Use the owning service controls to stop supervised processes. Processes without a systemd service are inspect-only here.</p>
+<div class="table-scroll"><table><thead><tr><th>Process</th><th>PID / parent</th><th>User</th><th>Listeners</th><th>Owning service</th><th>Nginx configs</th></tr></thead><tbody id="process-rows">
+{% for process in inventory.processes %}<tr data-filter-row><td>{{ process.command }}</td><td>{{ process.pid }} / {{ process.ppid }}</td><td>{{ process.user }}</td><td>{{ process.listeners|join(', ') or '—' }}</td><td>{% if process.unit %}<a href="#service-{{ process.unit }}">{{ process.unit }}</a>{% else %}Unsupervised / other manager{% endif %}</td><td>{% for config in process.configs %}<a class="config-link" href="{{ config.url }}">{{ config.id }}</a>{% else %}—{% endfor %}</td></tr>{% else %}<tr><td colspan="6" class="empty">No process inventory available.</td></tr>{% endfor %}
+</tbody></table></div></section>
+{% endblock %}

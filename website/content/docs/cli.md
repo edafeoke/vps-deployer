@@ -44,7 +44,7 @@ vps-deployer nginx reset my-next-app
 vps-deployer rollback my-next-app
 sudo vps-deployer update
 sudo vps-deployer update --yes
-sudo vps-deployer update --version 0.4.0
+sudo vps-deployer update --version 0.5.0
 sudo vps-deployer update --source /path/to/vps-deployer
 sudo vps-deployer update --force
 vps-deployer uninstall

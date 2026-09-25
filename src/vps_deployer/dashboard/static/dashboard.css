@@ -120,6 +120,7 @@ footer {
 
 .nav {
   display: flex;
+  flex-wrap: wrap;
   gap: 1.4rem;
   padding: 0.9rem 0 1.5rem;
   border-bottom: 1px solid var(--line);
@@ -295,6 +296,38 @@ button {
 textarea {
   min-height: 8rem;
   resize: vertical;
+}
+
+.host-health,
+.file-facts {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr;
+  gap: 1.5rem;
+  padding: 1.2rem 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.table-scroll { overflow-x: auto; margin: 1rem 0 2rem; }
+.table-scroll table { min-width: 760px; }
+.table-scroll td { min-width: 7rem; max-width: 23rem; overflow-wrap: anywhere; }
+.table-scroll strong { color: var(--ink); }
+.table-scroll td > .muted { margin-top: 0.3rem; font-size: 0.85rem; }
+.config-link { display: block; margin-bottom: 0.5rem; }
+.search-label { flex: 0 1 22rem; font-size: 0.8rem; }
+.code-editor { width: 100%; white-space: pre; tab-size: 4; margin: 0.6rem 0 1rem; }
+.danger-zone { border-top: 1px solid var(--fail); margin-top: 2rem; }
+button.danger { background: transparent; color: var(--fail); border-color: var(--fail); }
+.service-controls { min-width: 17rem; margin-top: 0.8rem; }
+.service-controls input { width: 100%; }
+.service-controls .actions { margin-top: 0.7rem; }
+summary { cursor: pointer; color: var(--amber); }
+details { margin: 0.6rem 0; }
+:focus-visible { outline: 2px solid var(--amber); outline-offset: 3px; }
+@media (max-width: 720px) {
+  .host-health, .file-facts { grid-template-columns: 1fr; }
+  .section-head { flex-wrap: wrap; }
+  .nav { gap: 0.8rem 1.2rem; }
 }
 
 #nginx-config {

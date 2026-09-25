@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero">
+  <p class="crumb"><a href="/nginx">Nginx</a> / {{ config.id }}</p>
+  <h1>{{ config.id.split('/')[-1] }}</h1><p class="path">{{ config.path }}</p>
+  <p>{{ 'Enabled' if config.enabled else 'Disabled / shared config' }} · {{ config.ownership }} · {{ config.domains|join(', ') }}</p>
+  {% if config.project %}<p><a href="/projects/{{ config.project }}">Open project {{ config.project }}</a> · Project edits are applied and preserved across deployments.</p>{% endif %}
+</section>
+<section>
+  <div class="section-head"><h2>Configuration editor</h2><a href="{{ config.url }}">Reload file from disk</a></div>
+  <p class="muted">Save tests the active Nginx configuration. Save &amp; reload also activates the change. Keep privileged include, log, certificate and module directives unchanged. Disabled files remain unverified until enabled.</p>
+  <form class="stack" method="post" action="/nginx/action">
+    <input type="hidden" name="config" value="{{ config.id }}" /><input type="hidden" name="revision" value="{{ config.revision }}" />
+    <label for="host-config">Nginx configuration</label>
+    <textarea class="code-editor" id="host-config" name="content" rows="28" maxlength="256000" spellcheck="false" required>{{ config.content }}</textarea>
+    <div class="actions">
+      {% if not config.project %}<button class="ghost" name="action" value="save">Save &amp; test</button>{% endif %}
+      <button name="action" value="save-reload">Save &amp; reload</button>
+    </div>
+  </form>
+</section>
+<section class="file-facts">
+  <div><h2>App locations</h2><p class="path">{{ config.roots|join(', ') or 'Proxy target — see Services for working directory' }}</p><p class="path">{{ config.upstreams|join(', ') }}</p><a href="/services">Find related services &amp; processes →</a></div>
+  <div><h2>TLS files</h2><p class="path">{{ config.certificates|join(', ') or 'No certificate directive in this file' }}</p><p class="path">{{ config['keys']|join(', ') }}</p></div>
+</section>
+{% if config.site %}
+{% if not config.project and not config.imported %}
+<section>
+  <h2>Import into VPS Deployer</h2><p>Adopt this website in place. Existing files, certificate paths and running processes stay in place. This adds operational management; Git-based releases remain a separate deployment project.</p>
+  <form class="stack" method="post" action="/nginx/adopt">
+    <input type="hidden" name="config" value="{{ config.id }}" />
+    <label>Application name<input name="name" required pattern="[a-z][a-z0-9-]{1,62}" placeholder="my-existing-app" /></label>
+    <label>Application service<select name="unit"><option value="">Static site / no systemd service</option>{% for service in services %}{% if not service.protected %}<option value="{{ service.unit }}">{{ service.unit }} · {{ service.state }}</option>{% endif %}{% endfor %}</select></label>
+    <button>Import existing website</button>
+  </form>
+</section>
+{% endif %}
+<section class="danger-zone">
+  <h2>Website controls</h2><p>Disabling takes the website out of Nginx. Deleting removes this config and its enabled links, with a recoverable backup. Neither action removes app files, certificates, or stops its backend service.</p>
+  <form class="stack" method="post" action="/nginx/action">
+    <input type="hidden" name="config" value="{{ config.id }}" /><input type="hidden" name="revision" value="{{ config.revision }}" />
+    <label>Confirm by typing <code>{{ config.id }}</code><input name="confirm" autocomplete="off" /></label>
+    <div class="actions">{% if config.enabled %}<button class="danger" name="action" value="disable">Disable website</button>{% else %}<button name="action" value="enable">Enable website</button>{% endif %}
+    <button class="danger" name="action" value="delete">Delete website config</button></div>
+  </form>
+</section>
+{% endif %}
+{% endblock %}
