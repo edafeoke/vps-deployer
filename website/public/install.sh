@@ -164,7 +164,7 @@ resolve_source() {
     version="$(printf '%s' "$version" | tr -d '[:space:]')"
   fi
   if [[ -z "$version" ]]; then
-    version="0.5.0"
+    version="0.6.0"
   fi
   if ! vd_validate_semver "$version"; then
     echo "Invalid version: ${version}" >&2

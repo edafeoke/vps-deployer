@@ -87,6 +87,9 @@
   {% else %}
   <p class="empty">No domains attached.</p>
   {% endif %}
+  {% if nginx.transferred_config %}
+  <p class="muted">Domains were transferred with the existing Nginx site. Automatic domain and Let's Encrypt changes are disabled to preserve its custom settings. Replace an existing TLS pair through External SSL below.</p>
+  {% else %}
   <form class="inline" method="post" action="/projects/{{ project.name }}/domains">
     <label>
       Hostname
@@ -105,6 +108,7 @@
     </label>
     <button type="submit" class="ghost">Enable HTTPS</button>
   </form>
+  {% endif %}
 </section>
 <section>
   <h2>Nginx configuration</h2>
@@ -121,13 +125,17 @@
     <dt>Private key files</dt><dd class="path">{{ nginx.certificate_keys|join(", ") or "None" }}</dd>
   </dl>
   {% if nginx.content %}
+  {% if nginx.transferred_config %}
+  <p class="muted">This transferred file is preserved on every deployment. Keep server names and privileged directives unchanged. <a href="/nginx/config?config={{ nginx.transferred_config|urlencode }}">Open host editor and website controls →</a></p>
+  {% else %}
   <p class="muted">Tune request size and proxy timeouts below. Routing and TLS declarations stay tied to the domains/SSL controls. Reset custom config before changing domains or SSL.</p>
+  {% endif %}
   <form class="stack" method="post" action="/projects/{{ project.name }}/nginx">
     <label for="nginx-config">Site configuration</label>
-    <textarea id="nginx-config" name="content" rows="22" maxlength="12000" spellcheck="false" required data-prevent-refresh>{{ nginx.content }}</textarea>
+    <textarea id="nginx-config" name="content" rows="22" maxlength="{{ 256000 if nginx.transferred_config else 12000 }}" spellcheck="false" required data-prevent-refresh>{{ nginx.content }}</textarea>
     <button type="submit">Save and apply Nginx config</button>
   </form>
-  {% if nginx.custom %}
+  {% if nginx.custom and not nginx.transferred_config %}
   <form method="post" action="/projects/{{ project.name }}/nginx/reset">
     <button type="submit" class="ghost" data-confirm="Discard custom Nginx edits and restore the generated config?">Reset to generated config</button>
   </form>
@@ -136,7 +144,7 @@
 </section>
 <section>
   <h2>External SSL / Cloudflare Origin CA</h2>
-  <p>Use certificate and private key files already installed on this VPS under <code>/etc/ssl/vps-deployer/{{ project.name }}/</code>. The certificate must cover every attached hostname, including www.</p>
+  <p>Enter the current absolute paths to your certificate and private key on this VPS. VPS Deployer validates and copies them automatically into <code>/etc/ssl/vps-deployer/{{ project.name }}/</code>, keeping the private key root-only. Source files are preserved. The certificate must cover every attached hostname, including www.</p>
   <p class="muted">For Cloudflare Origin CA, enable proxied DNS and Full (strict). External certificates are renewed by you, not Certbot.</p>
   <form class="stack" method="post" action="/projects/{{ project.name }}/ssl/external">
     <label>Certificate path<input name="certificate" required placeholder="/etc/ssl/vps-deployer/{{ project.name }}/origin.pem" value="{{ ssl.certificate if ssl.provider == 'external' else '' }}" /></label>

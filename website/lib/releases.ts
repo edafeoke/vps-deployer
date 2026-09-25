@@ -7,6 +7,13 @@ export type Release = {
 
 export const releases: Release[] = [
   {
+    version: "0.6.0",
+    date: "2026-09-25",
+    title: "Certificate import and website handover",
+    summary:
+      "Automatically copy external certificates into secure project storage, deploy and health-check a replacement app, transfer its existing Nginx site, and stop old services with recovery safeguards.",
+  },
+  {
     version: "0.5.0",
     date: "2026-09-25",
     title: "Host-wide Nginx and services",

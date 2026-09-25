@@ -115,6 +115,10 @@ Diagnostics only in this phase. Future firewall changes must show the intended r
 
 ## Privacy
 
+External certificate imports read bounded regular PEM source files through the root-owned helper, validate the copied key/certificate and hostname coverage, and create unique files directly under `/etc/ssl/vps-deployer/<project>/` (key mode 600). Source files and previous pairs are retained; no private key data is returned to the panel, database or logs. Destination symlinks and unsafe directory ownership/permissions are rejected.
+
+Website handover requires explicit source-config confirmation and selected old services. A healthy replacement is required before the Nginx switch; only linked, non-protected systemd application services not shared with another enabled website can be stopped. The root helper independently rejects infrastructure/project service targets, keeps a backup, and attempts recovery on failed reload/stop. Abrupt interruption or failed recovery requires administrator inspection of deployment logs and backup files. Existing trusted Nginx directives are preserved, not executed as shell commands. Handover does not transfer application secrets/data or disable future service activation.
+
 No telemetry by default. Your source code, credentials, and deployment history stay on your VPS.
 
 If telemetry is ever added, it must be optional, disabled by default, documented, and configurable.

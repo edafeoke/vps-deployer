@@ -1,5 +1,7 @@
 # Architecture
 
+Website handover is a queued deployment with project-scoped `pending_handover` intent, tied to its deployment ID and the source config revision. After build/runtime health checks, `core/handover.py` invokes the root-owned host helper to update the existing Nginx file, import its TLS pair, reload and stop selected old services. The project records `host_config_id`; subsequent deploys preserve that file and its custom settings. Domains move into the project only after cutover. Config/service backups support recovery; application data and environment migration remain explicit operator preparation.
+
 VPS Deployer is a self-hosted deployment platform that you install directly on your VPS. After installation, that VPS is the deployment platform. Applications you deploy run on the same machine.
 
 There is no central control plane. The public website does not manage your VPS, store your credentials, or authorize deployments.

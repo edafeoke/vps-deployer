@@ -362,7 +362,7 @@ def api_apply_nginx(project: str) -> dict[str, object]:
 
 
 class NginxConfigBody(BaseModel):
-    content: str = Field(min_length=1, max_length=12000)
+    content: str = Field(min_length=1, max_length=256000)
 
 
 @app.get("/api/projects/{project}/nginx")

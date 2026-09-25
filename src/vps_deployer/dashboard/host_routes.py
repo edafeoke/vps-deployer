@@ -5,6 +5,7 @@ from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 
+from vps_deployer.core.handover import queue_handover
 from vps_deployer.core.host import (
     adopt_site,
     control_service,
@@ -15,12 +16,13 @@ from vps_deployer.core.host import (
 )
 from vps_deployer.core.host_admin import HostError
 from vps_deployer.core.nginx import NginxError
+from vps_deployer.core.projects import ProjectNotFoundError, list_projects
 from vps_deployer.core.validation import ValidationError
 from vps_deployer.dashboard.routes import _page, _redirect
 from vps_deployer.dashboard.views import shell_context
 
 router = APIRouter()
-ERRORS = (HostError, NginxError, ValidationError, OSError)
+ERRORS = (HostError, NginxError, ValidationError, OSError, ProjectNotFoundError)
 
 
 def same_origin(request: Request):
@@ -65,6 +67,7 @@ def nginx_editor(request: Request, config: str, notice: str = "", error: str = "
             "page": "nginx",
             "config": item,
             "services": inventory["services"],
+            "projects": list_projects(),
         },
     )
 
@@ -100,6 +103,7 @@ def nginx_form(
                         "page": "nginx",
                         "config": item,
                         "services": services_inventory()["services"],
+                        "projects": list_projects(),
                     },
                     status_code=422,
                 )
@@ -183,6 +187,52 @@ class ServiceBody(BaseModel):
     unit: str
     action: str
     confirm: str = ""
+
+
+class HandoverBody(BaseModel):
+    config: str
+    project: str
+    revision: str
+    units: list[str] = Field(default_factory=list, max_length=10)
+    confirm: str
+
+
+@router.post("/api/host/handover")
+def api_handover(request: Request, body: HandoverBody):
+    same_origin(request)
+    if body.confirm != body.config:
+        raise HTTPException(422, "confirm must match the source config id")
+    try:
+        return queue_handover(body.config, body.project, body.units, body.revision)
+    except ERRORS as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
+@router.post("/nginx/handover", include_in_schema=False)
+def handover_form(
+    request: Request,
+    config: Annotated[str, Form()],
+    project: Annotated[str, Form()],
+    revision: Annotated[str, Form()],
+    confirm: Annotated[str, Form()],
+    units: Annotated[str, Form()] = "",
+):
+    same_origin(request)
+    if confirm != config:
+        return _redirect(
+            "/nginx",
+            error="Type the source config id to confirm deployment, "
+            "traffic switch and stopping the old services",
+        )
+    try:
+        result = queue_handover(
+            config, project, [u.strip() for u in units.split(",") if u.strip()], revision
+        )
+    except ERRORS as exc:
+        return _redirect("/nginx", error=str(exc))
+    return _redirect(
+        "/services", notice=result["message"] + " Follow deployment logs in Projects → " + project
+    )
 
 
 @router.get("/api/host/nginx")

@@ -24,6 +24,22 @@
   <div><h2>TLS files</h2><p class="path">{{ config.certificates|join(', ') or 'No certificate directive in this file' }}</p><p class="path">{{ config['keys']|join(', ') }}</p></div>
 </section>
 {% if config.site %}
+{% if not config.project and config.enabled %}
+<section class="danger-zone">
+  <p class="eyebrow">DEPLOY → VERIFY → SWITCH → STOP OLD SERVICES</p>
+  <h2>Replace with a deployed project</h2>
+  <p>Create a Git deployment project without a domain, then select it here. We deploy and health-check it first, preserve this Nginx file’s settings, copy its SSL files, switch its backend or static root, and stop the selected old services. A failed build leaves this website untouched.</p>
+  <p class="muted">Supports one direct loopback HTTP backend or one static root. Database, uploads and environment variables are not copied—prepare these on the replacement project first. Old services are stopped, not disabled at boot.</p>
+  <form class="stack" method="post" action="/nginx/handover">
+    <input type="hidden" name="config" value="{{ config.id }}" /><input type="hidden" name="revision" value="{{ config.revision }}" />
+    <label>Replacement project<select name="project" required><option value="">Choose a project</option>{% for project in projects %}<option value="{{ project.name }}">{{ project.name }} · {{ project.repository }} · {{ project.runtime }}</option>{% endfor %}</select></label>
+    <label>Old services to stop (comma-separated)<input name="units" placeholder="legacy-app.service" /></label>
+    <p class="muted">Only services linked to this config are accepted. See <a href="/services">Services &amp; processes</a>. Leave blank only for static sites without a service.</p>
+    <label>Confirm by typing <code>{{ config.id }}</code><input name="confirm" required autocomplete="off" /></label>
+    <button class="danger">Deploy replacement &amp; transfer website</button>
+  </form>
+</section>
+{% endif %}
 {% if not config.project and not config.imported %}
 <section>
   <h2>Import into VPS Deployer</h2><p>Adopt this website in place. Existing files, certificate paths and running processes stay in place. This adds operational management; Git-based releases remain a separate deployment project.</p>

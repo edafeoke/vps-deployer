@@ -12,6 +12,7 @@ import os
 import re
 import shlex
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -57,6 +58,91 @@ def revision(content: str) -> str:
     return hashlib.sha256(content.encode()).hexdigest()
 
 
+def import_certificate(payload: dict, base=Path("/etc/ssl/vps-deployer"), runner=run) -> dict:
+    """Copy validated PEM files to unique, root-private paths; never replace active keys."""
+    name = payload.get("project", "")
+    if not re.fullmatch(r"[a-z][a-z0-9-]{1,62}", name):
+        raise HostError("Invalid project name")
+    hosts = payload.get("hostnames", [])
+    if not 1 <= len(hosts) <= 20 or any(
+        not re.fullmatch(r"[a-z0-9][a-z0-9.-]*\.[a-z]{2,}", h) for h in hosts
+    ):
+        raise HostError("Provide 1–20 valid certificate hostnames")
+    contents = []
+    for field in ("certificate", "certificate_key"):
+        path = Path(payload.get(field, ""))
+        if (
+            not path.is_absolute()
+            or ".." in path.parts
+            or path.suffix not in {".pem", ".crt", ".key"}
+        ):
+            raise HostError("Use absolute PEM certificate/key source paths")
+        # O_NONBLOCK prevents a FIFO/device from hanging the privileged helper.
+        fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK)
+        with os.fdopen(fd, "rb") as source:
+            if not stat.S_ISREG(os.fstat(source.fileno()).st_mode):
+                raise HostError("Certificate sources must be regular files")
+            data = source.read(1_000_001)
+        if not data or len(data) > 1_000_000:
+            raise HostError("Certificate source is empty or too large")
+        contents.append(data)
+    dest = base / name
+    for parent in (dest, *dest.parents):
+        if not parent.exists() and not parent.is_symlink():
+            continue
+        info = parent.lstat()
+        if stat.S_ISLNK(info.st_mode) or info.st_uid != os.geteuid():
+            raise HostError(
+                "Certificate destination must be owned by the helper user without symlinks"
+            )
+        if info.st_mode & 0o022:
+            raise HostError("Certificate destination must not be group/world writable")
+        if parent == base.parent:
+            break
+    base.mkdir(exist_ok=True, mode=0o700)
+    dest.mkdir(exist_ok=True, mode=0o700)
+    paths = []
+    try:
+        for prefix, data in zip(("cert-", "key-"), contents, strict=True):
+            fd, filename = tempfile.mkstemp(prefix=prefix, suffix=".pem", dir=dest)
+            paths.append(Path(filename))
+            with os.fdopen(fd, "wb") as output:
+                output.write(data)
+        cert, key = map(str, paths)
+        checks = [
+            ["openssl", "x509", "-in", cert, "-noout", "-checkend", "0"],
+            *[
+                [
+                    "openssl",
+                    "verify",
+                    "-no-CAfile",
+                    "-no-CApath",
+                    "-partial_chain",
+                    "-trusted",
+                    cert,
+                    "-verify_hostname",
+                    host,
+                    cert,
+                ]
+                for host in hosts
+            ],
+        ]
+        if any(runner(command).returncode for command in checks):
+            raise HostError(
+                "Certificate is invalid, expired, not yet valid, or does not cover every hostname"
+            )
+        public = runner(["openssl", "x509", "-in", cert, "-pubkey", "-noout"])
+        private = runner(["openssl", "pkey", "-in", key, "-passin", "pass:", "-pubout"])
+        if public.returncode or private.returncode or public.stdout != private.stdout:
+            raise HostError("Certificate and unencrypted private key must match")
+        paths[0].chmod(0o644)
+        return {"certificate": cert, "certificate_key": key}
+    except Exception:
+        for path in paths:
+            path.unlink(missing_ok=True)
+        raise
+
+
 def config_metadata(content: str) -> dict:
     def values(directive):
         cleaned = re.sub(r"(?m)^\s*#.*$", "", content)
@@ -73,6 +159,53 @@ def config_metadata(content: str) -> dict:
         "certificates": values("ssl_certificate"),
         "keys": values("ssl_certificate_key"),
     }
+
+
+def handover_content(content: str, project: str, port: int, runtime: str, apps_root: Path) -> str:
+    """Change only one unambiguous app destination, preserving all other site settings."""
+    if not re.fullmatch(r"[a-z][a-z0-9-]{1,62}", project) or not 33000 <= port <= 33999:
+        raise HostError("Invalid handover project or port")
+    metadata = config_metadata(content)
+    rows = directives(content)
+    if any(
+        row[0] in {"fastcgi_pass", "uwsgi_pass", "grpc_pass", "upstream", "alias"} for row in rows
+    ):
+        raise HostError(
+            "Handover supports a single direct HTTP proxy or static root, "
+            "not FastCGI, aliases or upstream groups"
+        )
+    roots = set(metadata["roots"]) - {"/var/www/certbot"}
+    if runtime in {"static", "vite"}:
+        if metadata["upstreams"] or len(roots) != 1:
+            raise HostError("Static handover requires exactly one application root and no proxy")
+        old = next(iter(roots))
+        target = apps_root / project / "current"
+        if runtime == "vite":
+            target /= "dist"
+        replacement = str(target)
+        directive = "root"
+    else:
+        targets = set(metadata["upstreams"])
+        if len(targets) != 1 or roots:
+            raise HostError("Proxy handover requires exactly one backend and no application roots")
+        old = next(iter(targets))
+        match = re.fullmatch(
+            r"http://(?:127\.0\.0\.1|localhost|\[::1\]):([0-9]+)(/[^\s;{}]*)?", old
+        )
+        if not match or int(match[1]) == port:
+            raise HostError(
+                "Choose a direct loopback HTTP backend and a different new application port"
+            )
+        replacement = f"http://127.0.0.1:{port}" + (match[2] or "")
+        directive = "proxy_pass"
+    # Values must be plain, unquoted paths/URLs so replacement is unambiguous.
+    if any(c in old for c in "\"'\n\r$"):
+        raise HostError("Variable or quoted app destinations need manual migration")
+    return re.sub(
+        r"(\b" + directive + r"\s+)" + re.escape(old) + r"(?=\s*;)",
+        lambda m: m[1] + replacement,
+        content,
+    )
 
 
 def directives(content: str) -> list[list[str]]:
@@ -385,6 +518,168 @@ class NginxHost:
                 ),
             }
 
+    def handover(
+        self, payload: dict, apps_root=Path("/var/www/apps"), ssl_root=Path("/etc/ssl/vps-deployer")
+    ) -> dict:
+        with self.locked():
+            item = self.read(payload.get("id", ""))
+            if (
+                not item["site"]
+                or not item["enabled"]
+                or Path(item["id"]).name.startswith("vps-deployer")
+            ):
+                raise HostError("Select an enabled, unmanaged website")
+            if item["revision"] != payload.get("revision"):
+                raise HostError("Source config changed. Review and queue handover again.")
+            content = handover_content(
+                item["content"],
+                payload["project"],
+                int(payload["port"]),
+                payload["runtime"],
+                apps_root,
+            )
+            units = payload.get("units", [])
+            if not isinstance(units, list) or len(units) > 10:
+                raise HostError("Select up to 10 old application services")
+            active = []
+            for unit in units:
+                props = unit_details(unit, self.runner)
+                if service_protected(props.get("Id", unit)) or props.get("Id", unit).startswith(
+                    "vps-deployer-"
+                ):
+                    raise HostError(
+                        "Cannot stop infrastructure or deployed project services during handover"
+                    )
+                if props.get("ActiveState") == "active":
+                    active.append(unit)
+            certificates, keys = set(item["certificates"]), set(item["keys"])
+            copied = {}
+            if certificates or keys:
+                if len(certificates) != 1 or len(keys) != 1:
+                    raise HostError("Handover requires exactly one certificate/key pair")
+                copied = import_certificate(
+                    {
+                        "project": payload["project"],
+                        "hostnames": list(dict.fromkeys(item["domains"])),
+                        "certificate": next(iter(certificates)),
+                        "certificate_key": next(iter(keys)),
+                    },
+                    base=ssl_root,
+                )
+                for directive, value in [
+                    ("ssl_certificate", copied["certificate"]),
+                    ("ssl_certificate_key", copied["certificate_key"]),
+                ]:
+                    content = re.sub(
+                        r"(\b" + directive + r"\s+)[^;{}]+;",
+                        lambda m, v=value: m[1] + v + ";",
+                        content,
+                    )
+            path = self.resolve(item["id"])
+            backup = self._backup([path])
+            recovery = {"id": item["id"], "revision": revision(content), "units": active}
+            (backup / "handover.json").write_text(json.dumps(recovery))
+            stopped = False
+            try:
+                path.write_text(content)
+                self.reload()
+                stopped = True
+                for unit in active:
+                    result = service_action({"unit": unit, "action": "stop"}, self.runner)
+                    if result["service"].get("ActiveState") not in {"inactive", "failed"}:
+                        raise HostError("Old service did not stop: " + unit)
+            except (HostError, OSError) as exc:
+                recovery_errors = []
+                if stopped:
+                    for unit in active:
+                        try:
+                            service_action({"unit": unit, "action": "start"}, self.runner)
+                        except HostError as recovery_error:
+                            recovery_errors.append(str(recovery_error))
+                if recovery_errors:
+                    raise HostError(
+                        f"{exc}; old services could not be restarted: {recovery_errors}. "
+                        f"Replacement routing retained for recovery. Backup: {backup}"
+                    ) from exc
+                self.restore(backup)
+                try:
+                    self.reload()
+                except HostError as recovery_error:
+                    raise HostError(
+                        f"{exc}; recovery reload failed: {recovery_error}. Backup: {backup}"
+                    ) from exc
+                raise HostError(f"{exc}; previous website restored. Backup: {backup}") from exc
+            return {
+                "id": item["id"],
+                "backup": str(backup),
+                "content": content,
+                "stopped": active,
+                **copied,
+            }
+
+    def rollback_handover(self, payload: dict) -> dict:
+        with self.locked():
+            backup = Path(payload.get("backup", ""))
+            if (
+                backup.parent != self.backup_root
+                or not re.fullmatch(r"site-[A-Za-z0-9_-]+", backup.name)
+                or backup.is_symlink()
+            ):
+                raise HostError("Invalid handover backup")
+            recovery = json.loads((backup / "handover.json").read_text())
+            item = self.read(recovery["id"])
+            if item["revision"] != recovery["revision"]:
+                raise HostError("Website changed after handover; restore manually from backup")
+            for unit in recovery["units"]:
+                service_action({"unit": unit, "action": "start"}, self.runner)
+            self.restore(backup)
+            self.reload()
+            return {"message": "Previous website and services restored"}
+
+    def attach_certificate(self, payload: dict, ssl_root=Path("/etc/ssl/vps-deployer")) -> dict:
+        with self.locked():
+            item = self.read(payload.get("id", ""))
+            if item["revision"] != payload.get("revision"):
+                raise HostError("Config changed. Reload before importing the certificate.")
+            if (
+                not item["site"]
+                or len(set(item["certificates"])) != 1
+                or len(set(item["keys"])) != 1
+            ):
+                raise HostError(
+                    "Transferred sites must already have one explicit TLS certificate/key pair"
+                )
+            copied = import_certificate(
+                {**payload, "hostnames": list(dict.fromkeys(item["domains"]))}, base=ssl_root
+            )
+            content = item["content"]
+            for directive, field in [
+                ("ssl_certificate", "certificate"),
+                ("ssl_certificate_key", "certificate_key"),
+            ]:
+                content = re.sub(
+                    r"(\b" + directive + r"\s+)[^;{}]+;",
+                    lambda m, value=copied[field]: m[1] + value + ";",
+                    content,
+                )
+            path = self.resolve(item["id"])
+            backup = self._backup([path])
+            try:
+                path.write_text(content)
+                self.reload()
+            except (HostError, OSError) as exc:
+                self.restore(backup)
+                try:
+                    self.reload()
+                except HostError as recovery_error:
+                    raise HostError(
+                        f"{exc}; recovery reload failed: {recovery_error}. Backup: {backup}"
+                    ) from exc
+                raise HostError(
+                    f"{exc}; previous certificate config restored. Backup: {backup}"
+                ) from exc
+            return {**copied, "backup": str(backup)}
+
 
 def unit_details(unit: str, runner=run) -> dict:
     if not UNIT_RE.fullmatch(unit) or ".." in unit:
@@ -538,7 +833,15 @@ def main():
         raise HostError("Host administration requires the privileged helper")
     action = sys.argv[1] if len(sys.argv) == 2 else ""
     payload = {}
-    if action in {"host-nginx-read", "host-nginx-action", "host-service-action"}:
+    if action in {
+        "host-nginx-read",
+        "host-nginx-action",
+        "host-service-action",
+        "host-ssl-import",
+        "host-handover",
+        "host-handover-rollback",
+        "host-nginx-certificate",
+    }:
         raw = sys.stdin.read(MAX_CONFIG * 2 + 1)
         if len(raw) > MAX_CONFIG * 2:
             raise HostError("Request too large")
@@ -556,6 +859,14 @@ def main():
         result = service_inventory()
     elif action == "host-service-action":
         result = service_action(payload)
+    elif action == "host-ssl-import":
+        result = import_certificate(payload)
+    elif action == "host-handover":
+        result = host.handover(payload)
+    elif action == "host-handover-rollback":
+        result = host.rollback_handover(payload)
+    elif action == "host-nginx-certificate":
+        result = host.attach_certificate(payload)
     else:
         raise HostError("Unknown host action")
     print(json.dumps(result))

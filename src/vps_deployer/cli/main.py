@@ -583,6 +583,37 @@ def nginx_reset(name: str, yes: bool = typer.Option(False, "--yes")) -> None:
     console.print("Generated Nginx config restored.")
 
 
+@nginx_app.command("handover")
+def nginx_handover(
+    name: str,
+    config: str = typer.Option(..., "--config", help="Existing host Nginx config id"),
+    service: list[str] = typer.Option(
+        [], "--service", help="Old linked systemd service; repeat for multiple"
+    ),
+    yes: bool = typer.Option(False, "--yes"),
+) -> None:
+    """Deploy a replacement, transfer an existing website, then stop old services."""
+    from urllib.parse import quote
+
+    item = _api("GET", "/api/host/nginx/config?config=" + quote(config, safe=""))
+    if not yes and not typer.confirm(
+        f"Deploy {name}, transfer {config}, then stop {', '.join(service) or 'no services'}?"
+    ):
+        raise typer.Abort()
+    result = _api(
+        "POST",
+        "/api/host/handover",
+        {
+            "config": config,
+            "project": name,
+            "units": service,
+            "revision": item["revision"],
+            "confirm": config,
+        },
+    )
+    console.print(result["message"], markup=False)
+
+
 @ssl_app.command("external")
 def ssl_external(
     name: str,

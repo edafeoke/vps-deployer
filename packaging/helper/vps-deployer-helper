@@ -639,7 +639,7 @@ if [[ -z "$action" ]]; then
 fi
 
 case "$action" in
-  host-nginx-inventory | host-nginx-read | host-nginx-action | host-service-inventory | host-service-action)
+  host-nginx-inventory | host-nginx-read | host-nginx-action | host-service-inventory | host-service-action | host-ssl-import | host-handover | host-handover-rollback | host-nginx-certificate)
     [[ $# -eq 1 ]] || reject "unexpected host action arguments"
     exec /usr/bin/python3 -I /usr/local/libexec/vps-deployer-admin.py "$action"
     ;;

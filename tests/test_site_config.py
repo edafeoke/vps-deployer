@@ -140,8 +140,12 @@ def test_external_ssl_survives_reapply_and_is_visible(client, tmp_env):
     assert result.json()["ssl"]
     assert client.post("/api/projects/my-app/nginx").status_code == 200
     status = client.get("/api/projects/my-app/nginx").json()
-    assert status["certificates"] == [files["certificate"]]
-    assert status["certificate_keys"] == [files["certificate_key"]]
+    assert status["certificates"] == [result.json()["certificate"]]
+    assert status["certificate_keys"] == [result.json()["certificate_key"]]
+    assert (
+        Path(result.json()["certificate"]).read_bytes() == Path(files["certificate"]).read_bytes()
+    )
+    assert Path(result.json()["certificate_key"]).stat().st_mode & 0o777 == 0o600
     assert "listen 443 ssl;" in status["content"]
     assert (
         client.post(
@@ -153,7 +157,7 @@ def test_external_ssl_survives_reapply_and_is_visible(client, tmp_env):
     assert rejected.status_code == 422
     assert len(client.get("/api/projects/my-app/domains").json()["domains"]) == 2
     page = client.get("/projects/my-app")
-    assert files["certificate_key"] in page.text
+    assert result.json()["certificate_key"] in page.text
     assert "PRIVATE KEY" not in page.text
 
 
