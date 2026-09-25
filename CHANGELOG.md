@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.0 — 2026-09-25
+
+- External SSL now accepts existing absolute source paths and automatically copies validated PEM files directly into `/etc/ssl/vps-deployer/<project>/`. Copies use unique filenames, root ownership and private-key mode 600; sources and previously active pairs are preserved.
+- Added **Deploy replacement & transfer website** in the Nginx editor and `nginx handover` in the CLI. Build and health-check the target project before switching a single-backend/static Nginx site and stopping explicitly selected old systemd services.
+- Preserve the source Nginx filename and custom settings, transfer domain ownership, copy existing TLS files, and keep transferred configurations intact on subsequent deployments.
+- Added stale-config checks, protected/shared-service guards, failed-build isolation, Nginx backups and rollback on failed reload/service stop. Unsupported multi-backend, FastCGI and alias migrations fail explicitly.
+- Handover does not copy databases, uploaded files or environment variables, disable service boot activation, or automatically migrate Docker/PM2 processes.
+
 ## 0.5.0 — 2026-09-25
 
 - Add the Nginx menu with discovered configs, domains, ownership, enablement, and active configuration validation status, including unmanaged websites.

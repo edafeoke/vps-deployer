@@ -364,6 +364,7 @@ def execute_deployment(deployment_id: int, settings: Settings | None = None) -> 
     previous = _current_release(project_root)
     stopped_previous = False
     start_command: list[str] | None = None
+    handover_attempted = False
     try:
         append_log(deployment_id, f"Fetching {project.repository}", current)
         sha = _fetch_release(
@@ -392,6 +393,16 @@ def execute_deployment(deployment_id: int, settings: Settings | None = None) -> 
                     current,
                 )
             runtime.http_health(project)
+        from vps_deployer.core.handover import complete_handover
+        from vps_deployer.core.site_config import load_site_config
+
+        handover_attempted = bool(load_site_config(project.name, current).get("pending_handover"))
+        if complete_handover(project, deployment_id, current):
+            append_log(
+                deployment_id,
+                "Existing Nginx website transferred; old application services stopped",
+                current,
+            )
         finished = datetime.now(UTC)
         deployment = _update_deployment(
             deployment_id,
@@ -416,12 +427,17 @@ def execute_deployment(deployment_id: int, settings: Settings | None = None) -> 
         _cleanup_releases(project_root, current.release_retention, release_path)
         return deployment
     except Exception as exc:
-        if start_command is not None:
+        if start_command is not None and not handover_attempted:
             try:
                 runtime.stop(project)
             except Exception:
                 pass
-        if stopped_previous and previous is not None and previous.exists():
+        if (
+            stopped_previous
+            and previous is not None
+            and previous.exists()
+            and not handover_attempted
+        ):
             try:
                 fallback = _load_manifest(previous).get("start_command")
                 command = fallback if isinstance(fallback, list) else ["npm", "start"]
@@ -429,6 +445,19 @@ def execute_deployment(deployment_id: int, settings: Settings | None = None) -> 
                     runtime.start(project, previous, command)
             except Exception:
                 pass
+        from vps_deployer.core.handover import fail_handover
+
+        try:
+            fail_handover(project, deployment_id, current)
+        except Exception as cleanup_error:
+            append_log(deployment_id, f"Handover state cleanup failed: {cleanup_error}", current)
+        if handover_attempted:
+            append_log(
+                deployment_id,
+                "Handover failed. Healthy replacement retained on its own port for recovery; "
+                "inspect the error and backup before retrying.",
+                current,
+            )
         finished = datetime.now(UTC)
         message = redact(str(exc))
         deployment = _update_deployment(

@@ -5,6 +5,8 @@ summary: Create, import, inspect and manage applications on this VPS.
 
 The **Projects** page also lists websites imported from the **Nginx** menu. Importing adopts an existing configuration and optional systemd service in place, preserving its files and running processes. Imported apps have operational controls but do not use Git releases. See [Nginx and importing existing websites](/docs/nginx).
 
+To replace an existing application with Git deployments, create a project without a domain and use **Replace with a deployed project** in the old site's Nginx editor. The replacement is deployed and health-checked before traffic is switched and selected old services are stopped. This transfers Nginx settings and domains, not application data or environment variables. See [website handover](/docs/nginx).
+
 ## Services & processes
 
 The **Services & processes** menu lists systemd services (including installed inactive services), process names/PIDs/users, TCP and Unix listeners, working directories and associated Nginx configs. Direct loopback upstreams, named upstream groups and Unix sockets can be correlated with a service; imported apps can also specify an explicit service link. These links are inferred, not proof that a backend is healthy.

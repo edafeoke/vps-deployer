@@ -51,6 +51,12 @@ def save_site_config(name: str, state: dict[str, str], settings: Settings) -> No
 
 
 def require_generated_site(name: str, settings: Settings) -> None:
+    if load_site_config(name, settings).get("host_config_id"):
+        raise ValidationError(
+            "This project owns a transferred Nginx site. Edit it in the Nginx menu; "
+            "automatic domain/Let's Encrypt regeneration is disabled to preserve custom settings. "
+            "Existing external TLS files can be replaced using External SSL."
+        )
     if load_site_config(name, settings).get("custom"):
         raise ValidationError("Reset custom Nginx config before changing domains or SSL.")
 

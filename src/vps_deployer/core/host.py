@@ -22,7 +22,9 @@ def _local_command(argv: list[str]) -> subprocess.CompletedProcess[str]:
 
 
 def _call(action: str, payload: dict | None, settings: Settings) -> dict[str, Any]:
-    if settings.nginx_dir is not None and action.startswith("host-nginx"):
+    if settings.nginx_dir is not None and (
+        action.startswith("host-nginx") or action.startswith("host-handover")
+    ):
         assert settings.data_dir is not None
         host = NginxHost(
             settings.nginx_dir,
@@ -31,6 +33,16 @@ def _call(action: str, payload: dict | None, settings: Settings) -> dict[str, An
             settings.data_dir / "nginx.lock",
         )
         payload = payload or {}
+        if action == "host-nginx-certificate":
+            assert settings.ssl_dir is not None
+            return host.attach_certificate(payload, settings.ssl_dir)
+        if action == "host-handover":
+            assert settings.apps_root is not None and settings.ssl_dir is not None
+            if payload.get("units"):
+                raise HostError("Stopping old services requires a production systemd install")
+            return host.handover(payload, settings.apps_root, settings.ssl_dir)
+        if action == "host-handover-rollback":
+            return host.rollback_handover(payload)
         if action == "host-nginx-inventory":
             result = host.inventory()
             result["test"]["ok"] = None
@@ -84,10 +96,14 @@ def nginx_inventory(settings: Settings | None = None) -> dict:
     except HostError as exc:
         return {"configs": [], "test": {"ok": None, "detail": str(exc)}, "error": str(exc)}
     projects = {site_filename(p.name): p.name for p in list_projects(current)}
+    transferred = {
+        load_site_config(p.name, current).get("host_config_id"): p.name
+        for p in list_projects(current)
+    }
     imports = {row["config_id"]: row for row in imported_apps(current)}
     for row in result["configs"]:
         row["url"] = "/nginx/config?config=" + quote(row["id"], safe="")
-        row["project"] = projects.get(Path(row["id"]).name)
+        row["project"] = transferred.get(row["id"]) or projects.get(Path(row["id"]).name)
         adopted = imports.get(row["id"])
         row["imported"] = adopted["name"] if adopted else None
         row["ownership"] = "project" if row["project"] else "imported" if adopted else "unmanaged"
@@ -121,6 +137,8 @@ def nginx_action(payload: dict, settings: Settings | None = None) -> dict:
     result = _call("host-nginx-action", payload, current)
     if project and action in {"disable", "delete", "enable"}:
         state = load_site_config(project, current)
+        if state.get("host_config_id") and action != "delete":
+            state["host_config_id"] = result.get("id", item["id"])
         if action == "enable":
             state.pop("disabled", None)
         else:

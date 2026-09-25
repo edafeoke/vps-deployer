@@ -260,19 +260,68 @@ def enable_external_ssl(
 ) -> dict[str, object]:
     current = settings or get_settings()
     project = get_project(name, current)
+    state = load_site_config(name, current)
+    if state.get("host_config_id"):
+        from vps_deployer.core.host import _call
+        from vps_deployer.core.host_admin import HostError
+
+        try:
+            item = _call("host-nginx-read", {"id": state["host_config_id"]}, current)
+            copied = _call(
+                "host-nginx-certificate",
+                {
+                    "id": item["id"],
+                    "revision": item["revision"],
+                    "project": name,
+                    "certificate": certificate,
+                    "certificate_key": certificate_key,
+                },
+                current,
+            )
+        except HostError as exc:
+            raise SslError(str(exc), status_code=422) from exc
+        state.update(
+            provider="external",
+            certificate=copied["certificate"],
+            certificate_key=copied["certificate_key"],
+        )
+        save_site_config(name, state, current)
+        assert project.id is not None
+        _mark_ssl(project.id, True, current)
+        return ssl_status(name, current)
     require_generated_site(name, current)
     domains = list_domains(name, current)
     if not domains:
         raise SslError("Attach a domain before enabling HTTPS", status_code=409)
-    validate_external_certificate(
+    copied = copy_external_certificate(
         name, certificate, certificate_key, project_hostnames(domains), current
     )
-    state = {"provider": "external", "certificate": certificate, "certificate_key": certificate_key}
+    state = {"provider": "external", **copied}
     apply_project_nginx(project, domains, current, state=state)
     save_site_config(name, state, current)
     assert project.id is not None
     _mark_ssl(project.id, True, current)
     return ssl_status(name, current)
+
+
+def copy_external_certificate(
+    name: str, certificate: str, certificate_key: str, hostnames: list[str], settings: Settings
+) -> dict[str, str]:
+    from vps_deployer.core.host_admin import HostError, import_certificate
+
+    payload = dict(
+        project=name, certificate=certificate, certificate_key=certificate_key, hostnames=hostnames
+    )
+    try:
+        if settings.nginx_dir is not None:
+            assert settings.ssl_dir is not None
+            return import_certificate(payload, base=settings.ssl_dir)
+        result = require_helper("host-ssl-import", settings=settings, stdin=json.dumps(payload))
+        return json.loads(result.stdout)
+    except (HostError, HelperError, OSError, ValueError) as exc:
+        raise SslError(
+            "Unable to import external certificate: " + str(exc), status_code=422
+        ) from exc
 
 
 def renew_certificates(settings: Settings | None = None) -> dict[str, object]:

@@ -4,6 +4,8 @@ VPS Deployer is a self-hosted deployment platform that you install directly on y
 
 It lets you deploy and manage applications on that VPS using GitHub, systemd, nginx, domains, HTTPS, deployment logs, health checks, and rollbacks.
 
+External SSL accepts existing VPS certificate/key paths and copies validated files into secure project storage automatically. Use **Nginx → Replace with a deployed project** to deploy a replacement, transfer a single-backend/static site's configuration and domains, then stop its old systemd services after the switch succeeds.
+
 You do not create an account on the VPS Deployer website to install or use it. The website distributes documentation and the installer. Your VPS becomes the deployment platform.
 
 ```
@@ -82,7 +84,7 @@ vps-deployer ssl status my-next-app
 vps-deployer ssl renew
 vps-deployer nginx show my-next-app
 vps-deployer nginx edit my-next-app
-vps-deployer ssl external my-next-app --certificate /etc/ssl/vps-deployer/my-next-app/origin.pem --key /etc/ssl/vps-deployer/my-next-app/origin.key
+vps-deployer ssl external my-next-app --certificate /home/ubuntu/certificates/origin.pem --key /home/ubuntu/certificates/origin.key
 vps-deployer rollback my-next-app
 vps-deployer dashboard
 ```

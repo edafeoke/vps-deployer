@@ -5,6 +5,7 @@ from pathlib import Path
 
 from vps_deployer.core.config import Settings, get_settings
 from vps_deployer.core.helper import HelperError, helper_available, require_helper
+from vps_deployer.core.host_admin import HostError, config_metadata
 from vps_deployer.core.site_config import load_site_config, save_site_config, site_mutation
 from vps_deployer.core.validation import (
     APPS_ROOT,
@@ -22,6 +23,15 @@ CERTBOT_WEBROOT = Path("/var/www/certbot")
 
 class NginxError(RuntimeError):
     """Raised when an nginx site cannot be rendered or applied."""
+
+
+def _host_call(action: str, payload: dict, settings: Settings) -> dict:
+    from vps_deployer.core.host import _call
+
+    try:
+        return _call(action, payload, settings)
+    except HostError as exc:
+        raise NginxError(str(exc)) from exc
 
 
 def site_filename(project_name: str) -> str:
@@ -169,6 +179,14 @@ def apply_project_nginx(
 ) -> dict[str, object]:
     current = settings or get_settings()
     name = validate_project_name(project.name)
+    bound = load_site_config(name, current).get("host_config_id")
+    if bound:
+        return {
+            "applied": False,
+            "preserved": True,
+            "host_config_id": bound,
+            "domains": len(domains),
+        }
     if not domains:
         return remove_project_nginx(project, current)
     apps_root = current.apps_root if current.nginx_dir is not None else APPS_ROOT
@@ -235,7 +253,10 @@ def nginx_status(project_name: str, settings: Settings | None = None) -> dict[st
     content = ""
     path = str(_local_site_path(current, project.name)) if current.nginx_dir else None
     try:
-        if current.nginx_dir is not None:
+        if state.get("host_config_id"):
+            item = _host_call("host-nginx-read", {"id": state["host_config_id"]}, current)
+            path, content = item["path"], item["content"]
+        elif current.nginx_dir is not None:
             site = _local_site_path(current, project.name)
             content = site.read_text(encoding="utf-8") if site.exists() else ""
         elif helper_available(current):
@@ -243,7 +264,7 @@ def nginx_status(project_name: str, settings: Settings | None = None) -> dict[st
             path, _, content = result.stdout.partition("\n")
         else:
             error = "Privileged helper is not installed"
-    except (OSError, HelperError) as exc:
+    except (OSError, HelperError, HostError, NginxError) as exc:
         error = str(exc)
     active = bool(content)
     if not content and domains:
@@ -267,7 +288,8 @@ def nginx_status(project_name: str, settings: Settings | None = None) -> dict[st
         "path": path,
         "content": content,
         "installed": active,
-        "custom": bool(state.get("custom")),
+        "custom": bool(state.get("custom") or state.get("host_config_id")),
+        "transferred_config": state.get("host_config_id"),
         "error": error,
         "deployment_path": str(deployment),
         "current_path": str(deployment / "current"),
@@ -294,6 +316,28 @@ def save_nginx_config(
     current = settings or get_settings()
     project = get_project(name, current)
     domains = list_domains(name, current)
+    state = load_site_config(name, current)
+    if state.get("host_config_id"):
+        if content is None:
+            raise ValidationError(
+                "Transferred sites cannot be reset to a generated config; use the Nginx editor"
+            )
+        item = _host_call("host-nginx-read", {"id": state["host_config_id"]}, current)
+        if set(config_metadata(content)["domains"]) != set(item["domains"]):
+            raise ValidationError(
+                "Keep transferred server_name declarations to preserve domain ownership"
+            )
+        _host_call(
+            "host-nginx-action",
+            {
+                "id": item["id"],
+                "revision": item["revision"],
+                "content": content,
+                "action": "save-reload",
+            },
+            current,
+        )
+        return nginx_status(name, current)
     if not domains:
         raise ValidationError("Attach a domain before configuring Nginx")
     state = load_site_config(name, current)
@@ -384,6 +428,14 @@ def validate_custom_config(
 def remove_project_nginx(project: Project, settings: Settings | None = None) -> dict[str, object]:
     current = settings or get_settings()
     name = validate_project_name(project.name)
+    state = load_site_config(name, current)
+    if state.get("host_config_id"):
+        item = _host_call("host-nginx-read", {"id": state["host_config_id"]}, current)
+        return _host_call(
+            "host-nginx-action",
+            {"id": item["id"], "revision": item["revision"], "action": "delete"},
+            current,
+        )
     if current.nginx_dir is not None:
         path = _local_site_path(current, name)
         path.unlink(missing_ok=True)

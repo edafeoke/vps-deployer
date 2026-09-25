@@ -36,7 +36,7 @@ curl -fsSL https://vps-deployer.onebitstack.com/install.sh | sudo bash
 Optional version pin:
 
 ```bash
-curl -fsSL https://vps-deployer.onebitstack.com/install.sh | sudo bash -s -- --version 0.5.0
+curl -fsSL https://vps-deployer.onebitstack.com/install.sh | sudo bash -s -- --version 0.6.0
 ```
 
 ## Review before installation

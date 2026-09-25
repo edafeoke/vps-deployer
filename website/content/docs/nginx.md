@@ -32,9 +32,29 @@ Disabling/deleting a Git-managed project's site records its disabled state so su
 
 On an unmanaged site's editor, choose **Import into VPS Deployer**, enter a unique application name, and optionally select its systemd service. This adopts it in place: no file migration, restart, certificate replacement, Git clone or new release. Imported applications appear in **Projects** and **Services & processes** with the original config and service links.
 
-Importing provides operational management, not conversion into the Git deployment/release workflow. Create a separate deployment project when you are ready for that transition. Sites managed by another tool may still be rewritten by that tool; importing does not disable it.
+Importing provides operational management without changing traffic. When ready to move to Git releases, use the replacement handover below. Sites managed by another tool may still be rewritten by that tool; importing does not disable it.
 
-Local development uses `VPS_DEPLOYER_NGINX_DIR` and labels validation unverified. It simulates host config changes and keeps backups under the local data directory without testing/reloading a real Nginx daemon. Production requires the 0.5.0 helper installed by the normal updater.
+Local development uses `VPS_DEPLOYER_NGINX_DIR` and labels validation unverified. It simulates host config changes and keeps backups under the local data directory without testing/reloading a real Nginx daemon. Stopping old services during handover requires production systemd. Production requires the 0.6.0 helper installed by the normal updater.
+
+## Deploy a replacement and transfer the website
+
+Create a replacement Git project **without a domain**, configure its build/start settings, environment and data dependencies, then open the existing site's Nginx editor. Under **Replace with a deployed project**, select the replacement, enter the linked old systemd service names, and type the config ID to confirm. Leave services blank only for a static site.
+
+```bash
+vps-deployer project add replacement --repository example/app --runtime node
+vps-deployer nginx handover replacement \
+  --config sites-available/old-app \
+  --service old-app.service
+vps-deployer logs replacement
+```
+
+The deployment worker builds the replacement and runs the normal runtime/static health checks before touching the old site. It then preserves the existing Nginx filename and custom settings, changes its app destination to the new project's reserved port or `current` directory, copies and validates its certificate/key pair, tests and reloads Nginx, and stops the explicitly selected old services. Domain ownership moves to the project and any in-place import record is replaced by the project association. Later deployments preserve the transferred file instead of generating a second conflicting site.
+
+Supported sources have one direct loopback HTTP backend or one static app root, with at most one explicit TLS pair. Multi-backend sites, named upstream groups, FastCGI, aliases, variable destinations and proxy/static mixed sites need manual migration. Old services must be linked to the source config and cannot be protected infrastructure, another deployment project, or a service shared by another enabled website. Environment variables, databases, uploads, background jobs and service boot activation are not migrated. Prepare these before confirming. Stopping is not disabling: socket/timer/boot triggers can restart a service.
+
+A failed build leaves the old website untouched. Changes to the source file during deployment cancel cutover. A failed Nginx reload or service stop attempts to restart the old services and restore/reload the backed-up site. Errors include the backup path when recovery needs manual intervention. A healthy replacement is retained on its own port after a cutover failure so recovery does not remove a backend that may already be receiving traffic. Check deployment logs before retrying. Abrupt machine/process failure during cutover may require manual recovery from the root-owned backup.
+
+Transferred sites can be edited from the host menu, project page or `nginx edit`. Server names and privileged directives remain protected. Reset/domain/Let's Encrypt regeneration is blocked to avoid discarding custom settings; existing TLS pairs can be replaced through External SSL. Disable/enable still work; deployments never republish a disabled site. Backups include `handover.json` recording the changed config revision and old services for recovery.
 
 ## Generated project sites
 
