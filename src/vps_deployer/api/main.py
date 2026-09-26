@@ -12,6 +12,8 @@ from sqlalchemy import text
 from vps_deployer.core.config import get_settings
 from vps_deployer.core.dashboard_access import (
     SESSION_COOKIE,
+    DashboardStateError,
+    load_dashboard_state,
     requires_dashboard_auth,
     valid_session_cookie,
 )
@@ -101,9 +103,20 @@ mount_dashboard_static(app)
 @app.middleware("http")
 async def require_public_dashboard_login(request: Request, call_next):
     settings = get_settings()
-    if not requires_dashboard_auth(request.headers.get("host"), request.url.path, settings):
+    # Keep health checks, static assets and independently signed webhooks available.
+    if request.url.path in {"/health", "/api/github/webhook"} or request.url.path.startswith(
+        "/static/"
+    ):
         return await call_next(request)
-    if valid_session_cookie(request.cookies.get(SESSION_COOKIE), settings):
+    try:
+        load_dashboard_state(settings)  # Validate even on the login/logout routes.
+        required = requires_dashboard_auth(request.headers.get("host"), request.url.path, settings)
+        authenticated = required and valid_session_cookie(
+            request.cookies.get(SESSION_COOKIE), settings
+        )
+    except DashboardStateError as exc:
+        return JSONResponse({"detail": str(exc)}, status_code=503)
+    if not required or authenticated:
         return await call_next(request)
     if request.url.path.startswith("/api/"):
         return JSONResponse({"detail": "Authentication required"}, status_code=401)
