@@ -3,15 +3,18 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import os
+import pwd
 import secrets
 import subprocess
+import tempfile
 import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, TypedDict
 from urllib.parse import unquote
 
-from vps_deployer.core.config import Settings, get_settings
+from vps_deployer.core.config import PRODUCTION_CONFIG_DIR, Settings, get_settings
 from vps_deployer.core.domains import DomainConflictError, claimed_hostnames
 from vps_deployer.core.helper import HelperError, helper_available, require_helper
 from vps_deployer.core.nginx import (
@@ -58,6 +61,17 @@ class DashboardAccessError(RuntimeError):
         self.status_code = status_code
 
 
+class DashboardStateError(DashboardAccessError):
+    """Authentication configuration exists but cannot safely be used."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            "Dashboard authentication configuration is unreadable or invalid. "
+            "Repair dashboard.json permissions or restore a valid backup on the server.",
+            503,
+        )
+
+
 @dataclass
 class DashboardState:
     hosts: list[str]
@@ -87,20 +101,20 @@ def dashboard_state_path(settings: Settings | None = None) -> Path:
 def load_dashboard_state(settings: Settings | None = None) -> DashboardState | None:
     path = dashboard_state_path(settings)
     try:
-        if not path.is_file():
-            return None
         payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+    except FileNotFoundError:
         return None
+    except (OSError, ValueError) as exc:
+        raise DashboardStateError() from exc
     if not isinstance(payload, dict):
-        return None
+        raise DashboardStateError()
     hosts = payload.get("hosts")
     password_hash = payload.get("password_hash")
     session_secret = payload.get("session_secret")
-    if not isinstance(hosts, list) or not isinstance(password_hash, str):
-        return None
+    if not isinstance(hosts, list) or not isinstance(password_hash, str) or not password_hash:
+        raise DashboardStateError()
     if not isinstance(session_secret, str) or not session_secret:
-        return None
+        raise DashboardStateError()
     cleaned: list[str] = []
     for item in hosts:
         if isinstance(item, str) and item:
@@ -116,20 +130,49 @@ def load_dashboard_state(settings: Settings | None = None) -> DashboardState | N
 def _write_state(state: DashboardState, settings: Settings) -> None:
     settings.ensure_directories()
     path = dashboard_state_path(settings)
-    path.write_text(
-        json.dumps(
-            {
-                "hosts": state.hosts,
-                "ssl": state.ssl,
-                "password_hash": state.password_hash,
-                "session_secret": state.session_secret,
-            },
-            indent=2,
-        )
-        + "\n",
-        encoding="utf-8",
-    )
-    path.chmod(0o640)
+    identity: tuple[int, int] | None = None
+    if settings.config_dir == PRODUCTION_CONFIG_DIR:
+        try:
+            account = pwd.getpwnam("vps-deployer")
+        except KeyError as exc:
+            raise DashboardAccessError("Service user vps-deployer does not exist") from exc
+        identity = (account.pw_uid, account.pw_gid)
+        if os.geteuid() not in {0, identity[0]}:
+            raise DashboardAccessError(
+                "Run dashboard configuration with sudo on a production install"
+            )
+    # Publish only a complete, private file readable by the panel service.
+    # Atomic replacement also prevents requests from observing truncated JSON.
+    temporary: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=path.parent,
+            prefix=".dashboard-",
+            delete=False,
+        ) as stream:
+            temporary = Path(stream.name)
+            os.fchmod(stream.fileno(), 0o600)
+            if identity is not None and os.geteuid() == 0:
+                os.fchown(stream.fileno(), *identity)
+            json.dump(
+                {
+                    "hosts": state.hosts,
+                    "ssl": state.ssl,
+                    "password_hash": state.password_hash,
+                    "session_secret": state.session_secret,
+                },
+                stream,
+                indent=2,
+            )
+            stream.write("\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
 
 
 def hash_password(password: str) -> str:

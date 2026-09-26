@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.1 — 2026-09-26
+
+- Fix CLI-created dashboard credentials being unreadable by the panel service; assign production ownership and private permissions before atomically saving the file.
+- Return HTTP 503 for unreadable or invalid authentication settings instead of silently leaving the panel and API unlocked.
+- Repair existing dashboard credential ownership during installation and updates; cover permission failures, invalid state, atomic saves and session invalidation with regression tests.
+
 ## 0.7.0 — 2026-09-25
 
 - Refresh the public documentation site with a shadcn-inspired dark console theme: semantic color tokens, amber primary actions, rounded cards, stronger navigation, sticky docs navigation, terminal code blocks and responsive mobile layout.

@@ -7,6 +7,13 @@ export type Release = {
 
 export const releases: Release[] = [
   {
+    version: "0.7.1",
+    date: "2026-09-26",
+    title: "Dashboard authentication permissions fix",
+    summary:
+      "Secure CLI-created password files with service ownership and atomic writes, repair existing permissions on update, and block panel access when authentication settings are unreadable or invalid.",
+  },
+  {
     version: "0.7.0",
     date: "2026-09-25",
     title: "Console theme and authenticated panel",
