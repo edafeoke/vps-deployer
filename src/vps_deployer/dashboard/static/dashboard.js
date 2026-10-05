@@ -66,3 +66,11 @@ document.querySelectorAll("input[data-filter]").forEach((input) => {
     });
   });
 });
+
+document.querySelector("[data-add-env]")?.addEventListener("click", () => {
+  const fields = document.querySelector("[data-env-fields]");
+  const row = fields.firstElementChild.cloneNode(true);
+  row.querySelectorAll("input").forEach(input => { input.value = ""; });
+  fields.append(row);
+  row.querySelector("input").focus();
+});

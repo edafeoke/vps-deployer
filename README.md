@@ -130,3 +130,18 @@ uv run uvicorn vps_deployer.api.main:app --host 127.0.0.1 --port 5100
 ## License
 
 See the repository license when published.
+
+### Project runtime and environment inputs
+
+New projects detect their runtime from the selected GitHub repository and branch.
+The panel runtime selector or CLI `--runtime` overrides detection. If detection
+cannot identify a supported framework or access the repository, select the runtime
+manually or correct repository access.
+
+The project creation panel accepts a UTF-8 `.env` upload, pasted `KEY=value` lines,
+and name/value fields. Inputs merge in that order, with the last assignment winning.
+The CLI accepts `--env-file .env` and repeatable `--env KEY=value` options; the API
+accepts an `environment` string. Values are literal (no shell expansion), single-line,
+and limited to 64 KiB per submission. `HOST` and `PORT` are managed by the platform.
+Variables are stored in the local database and supplied to builds and application
+processes; systemd receives a mode-0600 environment file at deployment time.

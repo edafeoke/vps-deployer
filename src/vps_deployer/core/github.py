@@ -369,6 +369,8 @@ def call_github(
         "X-GitHub-Api-Version": GITHUB_API_VERSION,
         "User-Agent": USER_AGENT,
     }
+    if not token:
+        headers.pop("Authorization")
     url = f"{GITHUB_API}{path}"
     try:
         response = httpx.request(method, url, headers=headers, json=json_body, timeout=10.0)

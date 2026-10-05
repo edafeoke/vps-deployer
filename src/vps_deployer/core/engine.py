@@ -15,7 +15,7 @@ from sqlmodel import Session, select
 from vps_deployer.core.config import Settings, get_settings
 from vps_deployer.core.runtime import RuntimeProvider, get_runtime
 from vps_deployer.core.validation import UNSAFE_CHARS, validate_app_path, validate_project_name
-from vps_deployer.db.models import Deployment, DeploymentLog, Project
+from vps_deployer.db.models import Deployment, DeploymentLog, EnvironmentVariable, Project
 from vps_deployer.db.session import get_engine, init_db
 
 TOKEN_RE = re.compile(r"(x-access-token:)[^@\s]+", re.IGNORECASE)
@@ -42,6 +42,16 @@ def append_log(deployment_id: int, message: str, settings: Settings) -> None:
         if any(secret in lowered for secret in ("password=", "secret=", "token=")):
             cleaned = "[redacted log line]"
     with _session(settings) as session:
+        deployment = session.get(Deployment, deployment_id)
+        if deployment:
+            values = session.exec(
+                select(EnvironmentVariable).where(
+                    EnvironmentVariable.project_id == deployment.project_id
+                )
+            ).all()
+            for row in values:
+                if row.value:
+                    cleaned = cleaned.replace(row.value, "***")
         session.add(DeploymentLog(deployment_id=deployment_id, message=cleaned[:4000]))
         session.commit()
     if settings.log_dir is not None:
@@ -169,8 +179,18 @@ def _run(
 ) -> None:
     safe = _validate_command(command)
     append_log(deployment_id, "$ " + redact(" ".join(safe)), settings)
+    env = os.environ.copy()
+    with _session(settings) as session:
+        deployment = session.get(Deployment, deployment_id)
+        project = session.get(Project, deployment.project_id) if deployment else None
+        if project and cwd.name != "releases":
+            from vps_deployer.core.environment import project_environment
+
+            env.update(project_environment(project, settings))
+            env.update(HOST="127.0.0.1", PORT=str(project.port))
     result = subprocess.run(
         safe,
+        env=env,
         cwd=cwd,
         check=False,
         capture_output=True,
@@ -371,6 +391,9 @@ def execute_deployment(deployment_id: int, settings: Settings | None = None) -> 
             project, release_path, deployment.commit_sha, deployment.branch, deployment_id, current
         )
         _update_deployment(deployment_id, current, commit_sha=sha, release_path=str(release_path))
+        from vps_deployer.core.environment import project_environment, write_environment
+
+        write_environment(project_root, project_environment(project, current))
         append_log(deployment_id, "Installing and building", current)
         start_command = _install_and_build(project, release_path, deployment_id, current)
         if start_command is None:

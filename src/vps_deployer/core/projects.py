@@ -41,9 +41,10 @@ class ProjectCreate:
     name: str
     repository: str
     branch: str = "main"
-    runtime: str = "nextjs"
+    runtime: str = "auto"
     port: int | None = None
     domain: str | None = None
+    environment: str = ""
 
 
 def project_payload(project: Project) -> dict[str, object]:
@@ -122,7 +123,15 @@ def create_project(data: ProjectCreate, settings: Settings | None = None) -> Pro
     name = validate_project_name(data.name)
     repository = validate_repository(data.repository)
     branch = validate_branch(data.branch)
-    runtime = validate_runtime(data.runtime)
+    from vps_deployer.core.detection import detect_runtime
+    from vps_deployer.core.environment import parse_environment
+
+    values = parse_environment(data.environment)
+    runtime = (
+        detect_runtime(repository, branch, settings)
+        if data.runtime == "auto"
+        else validate_runtime(data.runtime)
+    )
     domain = validate_domain(data.domain) if data.domain else None
     current = settings or get_settings()
     current.ensure_directories()
@@ -149,6 +158,10 @@ def create_project(data: ProjectCreate, settings: Settings | None = None) -> Pro
             updated_at=datetime.now(UTC),
         )
         session.add(project)
+        session.flush()
+        assert project.id is not None
+        for key, value in values.items():
+            session.add(EnvironmentVariable(project_id=project.id, key=key, value=value))
         session.commit()
         session.refresh(project)
         session.expunge(project)

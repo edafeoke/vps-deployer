@@ -290,9 +290,11 @@ def project_add(
     name: str = typer.Argument(..., help="Project name, for example my-next-app"),
     repository: str = typer.Option(..., "--repository", "-r", help="GitHub owner/name"),
     branch: str = typer.Option("main", "--branch", "-b"),
-    runtime: str = typer.Option("nextjs", "--runtime"),
+    runtime: str = typer.Option("auto", "--runtime"),
     port: int | None = typer.Option(None, "--port", help="Localhost port in 33000-33999"),
     domain: str | None = typer.Option(None, "--domain"),
+    env_file: Path | None = typer.Option(None, "--env-file"),
+    env: list[str] | None = typer.Option(None, "--env", help="KEY=value; repeat as needed"),
 ) -> None:
     """Add a project on this VPS. Does not deploy it."""
     body: dict[str, object] = {
@@ -301,6 +303,7 @@ def project_add(
         "branch": branch,
         "runtime": runtime,
     }
+    body["environment"] = (env_file.read_text() if env_file else "") + "\n" + "\n".join(env or [])
     if port is not None:
         body["port"] = port
     if domain is not None:

@@ -7,7 +7,7 @@
 <section>
   <h2>Add a project</h2>
   <p class="muted">Already running an app on this VPS? <a href="/nginx">Find its Nginx config and import it in place →</a></p>
-  <form class="stack" method="post" action="/projects">
+  <form class="stack" method="post" action="/projects" enctype="multipart/form-data">
     <label>
       Name
       <input name="name" required pattern="[a-z][a-z0-9-]{1,62}" placeholder="my-next-app" />
@@ -24,8 +24,9 @@
       <label>
         Runtime
         <select name="runtime">
+          <option value="auto" selected>Detect automatically</option>
           {% for item in runtimes %}
-          <option value="{{ item }}" {% if item == "nextjs" %}selected{% endif %}>{{ item }}</option>
+          <option value="{{ item }}">{{ item }}</option>
           {% endfor %}
         </select>
       </label>
@@ -40,6 +41,15 @@
         <input name="domain" placeholder="example.com" />
       </label>
     </div>
+    <fieldset class="stack">
+      <legend>Environment variables (optional)</legend>
+      <p class="muted">Upload a UTF-8 .env file, paste assignments, or add fields. Later entries override earlier ones: file, paste, then fields. Values are literal; HOST and PORT are managed automatically.</p>
+      <label>Upload .env<input type="file" name="env_file" /></label>
+      <label>Paste KEY=value assignments<textarea name="environment" rows="5" spellcheck="false" placeholder="API_KEY=your-key"></textarea></label>
+      <div data-env-fields><div class="split"><label>Variable name<input name="env_key" placeholder="API_KEY" pattern="[A-Za-z_][A-Za-z0-9_]*" /></label><label>Value<input name="env_value" type="password" autocomplete="new-password" /></label></div></div>
+      <button type="button" data-add-env>Add variable</button>
+    </fieldset>
+    <p class="muted">Automatic detection checks the selected repository and branch when you create the project. Choose a runtime above to override it.</p>
     <button type="submit">Create on this VPS</button>
   </form>
 </section>

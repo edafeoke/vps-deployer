@@ -7,6 +7,13 @@ export type Release = {
 
 export const releases: Release[] = [
   {
+    version: "0.8.0",
+    date: "2026-10-05",
+    title: "Runtime detection and environment inputs",
+    summary:
+      "Automatically detect project runtimes with a manual override, and supply environment variables through uploads, pasted assignments, form fields, or CLI options.",
+  },
+  {
     version: "0.7.1",
     date: "2026-09-26",
     title: "Dashboard authentication permissions fix",

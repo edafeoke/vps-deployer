@@ -118,7 +118,10 @@ class ProcessRuntimeProvider:
         persist_start_command(root, command)
         shared = root / "shared"
         shared.mkdir(parents=True, exist_ok=True)
+        from vps_deployer.core.environment import project_environment
+
         env = os.environ.copy()
+        env.update(project_environment(project))
         env["HOST"] = "127.0.0.1"
         env["PORT"] = str(project.port)
         env["NODE_ENV"] = env.get("NODE_ENV", "production")

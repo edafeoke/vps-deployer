@@ -39,6 +39,8 @@ def tmp_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Generator[Path, 
     monkeypatch.setenv("VPS_DEPLOYER_NGINX_DIR", str(tmp_path / "nginx"))
     monkeypatch.setenv("VPS_DEPLOYER_SSL_DIR", str(tmp_path / "ssl"))
     monkeypatch.setenv("VPS_DEPLOYER_SSL_EMAIL", "ops@example.com")
+    # Existing project fixtures are synthetic repositories; detector tests mock GitHub directly.
+    monkeypatch.setattr("vps_deployer.core.detection.detect_runtime", lambda *args: "nextjs")
     reset_settings()
     reset_engine()
     yield tmp_path

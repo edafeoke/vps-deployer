@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.0 — 2026-10-05
+
+- Detect project runtimes automatically from GitHub repositories, with a manual override.
+- Accept environment variables through file uploads, pasted assignments, form fields, and CLI options.
+- Supply environment variables to builds and application processes and redact values from deployment logs.
+
 ## 0.7.1 — 2026-09-26
 
 - Fix CLI-created dashboard credentials being unreadable by the panel service; assign production ownership and private permissions before atomically saving the file.

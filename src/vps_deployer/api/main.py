@@ -162,9 +162,10 @@ class ProjectCreateBody(BaseModel):
     name: str
     repository: str
     branch: str = "main"
-    runtime: str = "nextjs"
+    runtime: str = "auto"
     port: int | None = None
     domain: str | None = Field(default=None)
+    environment: str = ""
 
 
 def _project_error(exc: Exception) -> HTTPException:
@@ -202,6 +203,7 @@ def api_create_project(body: ProjectCreateBody) -> dict[str, object]:
                 runtime=body.runtime,
                 port=body.port,
                 domain=body.domain,
+                environment=body.environment,
             ),
             get_settings(),
         )

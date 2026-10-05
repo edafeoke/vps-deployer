@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Annotated
 from urllib.parse import quote
 
-from fastapi import APIRouter, FastAPI, Form, Request
+from fastapi import APIRouter, FastAPI, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -150,9 +150,13 @@ def dashboard_create_project(
     name: Annotated[str, Form()],
     repository: Annotated[str, Form()],
     branch: Annotated[str, Form()] = "main",
-    runtime: Annotated[str, Form()] = "nextjs",
+    runtime: Annotated[str, Form()] = "auto",
     port: Annotated[str, Form()] = "",
     domain: Annotated[str, Form()] = "",
+    environment: Annotated[str, Form()] = "",
+    env_file: Annotated[UploadFile | None, File()] = None,
+    env_key: Annotated[list[str] | None, Form()] = None,
+    env_value: Annotated[list[str] | None, Form()] = None,
 ) -> RedirectResponse:
     settings = get_settings()
     port_value: int | None = None
@@ -162,14 +166,31 @@ def dashboard_create_project(
         except ValueError:
             return _redirect("/projects", error="Port must be an integer in 33000-33999")
     try:
+        if env_file and env_file.filename:
+            try:
+                environment = env_file.file.read(65537).decode("utf-8-sig") + "\n" + environment
+            except UnicodeDecodeError as exc:
+                raise ValidationError("Environment file must be UTF-8 text") from exc
+        if len(env_key or []) != len(env_value or []):
+            raise ValidationError("Each environment variable needs a name and value")
+        for key, value in zip(env_key or [], env_value or [], strict=True):
+            if key.strip():
+                from vps_deployer.core.validation import ENV_NAME_RE
+
+                if not ENV_NAME_RE.fullmatch(key.strip()):
+                    raise ValidationError("Invalid environment variable name")
+                if any(char in key + value for char in "\r\n"):
+                    raise ValidationError("Environment fields must be single-line values")
+                environment += f'\n{key}="{value}"'
         project = create_project(
             ProjectCreate(
                 name=name.strip(),
                 repository=repository.strip(),
                 branch=branch.strip() or "main",
-                runtime=runtime.strip() or "nextjs",
+                runtime=runtime.strip() or "auto",
                 port=port_value,
                 domain=domain.strip() or None,
+                environment=environment,
             ),
             settings,
         )
