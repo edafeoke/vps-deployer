@@ -166,22 +166,9 @@ def dashboard_create_project(
         except ValueError:
             return _redirect("/projects", error="Port must be an integer in 33000-33999")
     try:
-        if env_file and env_file.filename:
-            try:
-                environment = env_file.file.read(65537).decode("utf-8-sig") + "\n" + environment
-            except UnicodeDecodeError as exc:
-                raise ValidationError("Environment file must be UTF-8 text") from exc
-        if len(env_key or []) != len(env_value or []):
-            raise ValidationError("Each environment variable needs a name and value")
-        for key, value in zip(env_key or [], env_value or [], strict=True):
-            if key.strip():
-                from vps_deployer.core.validation import ENV_NAME_RE
+        from vps_deployer.core.environment import merge_environment_inputs
 
-                if not ENV_NAME_RE.fullmatch(key.strip()):
-                    raise ValidationError("Invalid environment variable name")
-                if any(char in key + value for char in "\r\n"):
-                    raise ValidationError("Environment fields must be single-line values")
-                environment += f'\n{key}="{value}"'
+        environment = merge_environment_inputs(environment, env_file, env_key, env_value)
         project = create_project(
             ProjectCreate(
                 name=name.strip(),
@@ -223,6 +210,27 @@ def dashboard_project(
             status_code=404,
         )
     return _page(request, "project.html", context)
+
+
+@router.post("/projects/{name}/environment")
+def dashboard_update_environment(
+    name: str,
+    environment: Annotated[str, Form()] = "",
+    env_file: Annotated[UploadFile | None, File()] = None,
+    env_key: Annotated[list[str] | None, Form()] = None,
+    env_value: Annotated[list[str] | None, Form()] = None,
+    remove: Annotated[list[str] | None, Form()] = None,
+) -> RedirectResponse:
+    from vps_deployer.core.environment import merge_environment_inputs, update_environment
+
+    try:
+        text = merge_environment_inputs(environment, env_file, env_key, env_value)
+        update_environment(name, text, remove or [], get_settings())
+    except ProjectNotFoundError as exc:
+        return _redirect("/projects", error=_form_error(exc))
+    except ValidationError as exc:
+        return _redirect(f"/projects/{quote(name, safe='')}", error=_form_error(exc))
+    return _redirect(f"/projects/{name}", notice="environment_saved")
 
 
 @router.post("/projects/{name}/deploy")

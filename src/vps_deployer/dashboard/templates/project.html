@@ -42,6 +42,22 @@
   </article>
 </section>
 <section>
+  <h2>Environment variables</h2>
+  <p class="muted">Add or replace variables below. Omitted variables keep their values. Saved values are hidden. Redeploy after saving to apply build and runtime changes.</p>
+  <form class="stack" method="post" action="/projects/{{ project.name }}/environment" enctype="multipart/form-data">
+    {% if environment_keys %}
+    <fieldset class="stack environment-inputs environment-keys">
+      <legend>Saved variables · select to remove</legend>
+      {% for key in environment_keys %}
+      <label><input type="checkbox" name="remove" value="{{ key }}" /> {{ key }}</label>
+      {% endfor %}
+    </fieldset>
+    {% else %}<p class="muted">No environment variables saved.</p>{% endif %}
+    {% include "environment_inputs.html" %}
+    <button type="submit">Save environment variables</button>
+  </form>
+</section>
+<section>
   <h2>Deployments</h2>
   {% if deployments %}
   <table>

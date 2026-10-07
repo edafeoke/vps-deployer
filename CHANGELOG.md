@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.8.1 — 2026-10-05
+
+- Select GitHub repositories and branches from dropdowns, including paginated results and the repository default branch.
+- Preserve hash-prefixed environment values while ignoring comment lines; accept trailing comments after quoted values.
+- Add project environment editing with uploads, pasted assignments, fields, and explicit removals. Omitted values are preserved and saved values remain hidden.
+- Refresh systemd environment files on application startup so saved runtime changes apply after restart. Redeploy to apply build-time changes.
+
 ## 0.8.0 — 2026-10-05
 
 - Detect project runtimes automatically from GitHub repositories, with a manual override.

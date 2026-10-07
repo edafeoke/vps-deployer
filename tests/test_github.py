@@ -283,7 +283,7 @@ def test_list_repositories_uses_installation_token(tmp_env: Path, monkeypatch) -
             return {"name": "VPS Deployer Dev"}
         if method == "POST" and path.endswith("/access_tokens"):
             return {"token": "ghs_test_token"}
-        if method == "GET" and path == "/installation/repositories":
+        if method == "GET" and path == "/installation/repositories?per_page=100&page=1":
             return {
                 "repositories": [
                     {"full_name": "example/my-next-app", "default_branch": "main"},

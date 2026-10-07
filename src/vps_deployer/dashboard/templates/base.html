@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{{ title }} · VPS Deployer</title>
-    <link rel="stylesheet" href="/static/dashboard.css" />
+    <link rel="stylesheet" href="/static/dashboard.css?v={{ version }}" />
   </head>
   <body>
     <a class="skip" href="#main">Skip to content</a>
@@ -49,6 +49,6 @@
       <p>This dashboard manages only this VPS. If the public website is down, this installation still runs.</p>
       <p>Docs: <a href="{{ site_url }}/docs">{{ site_url }}/docs</a></p>
     </footer>
-    <script src="/static/dashboard.js" defer></script>
+    <script src="/static/dashboard.js?v={{ version }}" defer></script>
   </body>
 </html>

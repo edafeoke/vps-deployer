@@ -14,12 +14,15 @@
     </label>
     <label>
       Repository
-      <input name="repository" required placeholder="example/my-next-app" />
+      <select name="repository" required data-repository disabled><option value="">Loading repositories…</option></select>
     </label>
+    <p class="muted" data-repository-status role="status" aria-live="polite"></p>
+    <button type="button" class="ghost" data-retry-repositories>Reload repositories</button>
+    <p class="muted">Manage repository access in <a href="/settings">GitHub settings</a>.</p>
     <div class="split">
       <label>
         Branch
-        <input name="branch" value="main" />
+        <select name="branch" required data-branch disabled><option value="">Choose a repository first</option></select>
       </label>
       <label>
         Runtime
@@ -41,16 +44,9 @@
         <input name="domain" placeholder="example.com" />
       </label>
     </div>
-    <fieldset class="stack">
-      <legend>Environment variables (optional)</legend>
-      <p class="muted">Upload a UTF-8 .env file, paste assignments, or add fields. Later entries override earlier ones: file, paste, then fields. Values are literal; HOST and PORT are managed automatically.</p>
-      <label>Upload .env<input type="file" name="env_file" /></label>
-      <label>Paste KEY=value assignments<textarea name="environment" rows="5" spellcheck="false" placeholder="API_KEY=your-key"></textarea></label>
-      <div data-env-fields><div class="split"><label>Variable name<input name="env_key" placeholder="API_KEY" pattern="[A-Za-z_][A-Za-z0-9_]*" /></label><label>Value<input name="env_value" type="password" autocomplete="new-password" /></label></div></div>
-      <button type="button" data-add-env>Add variable</button>
-    </fieldset>
+    {% include "environment_inputs.html" %}
     <p class="muted">Automatic detection checks the selected repository and branch when you create the project. Choose a runtime above to override it.</p>
-    <button type="submit">Create on this VPS</button>
+    <button type="submit" data-create-project disabled>Create on this VPS</button>
   </form>
 </section>
 <section>

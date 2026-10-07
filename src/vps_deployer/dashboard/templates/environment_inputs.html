@@ -1,0 +1,8 @@
+    <fieldset class="stack environment-inputs">
+      <legend>Environment variables (optional)</legend>
+      <p class="muted">Upload a UTF-8 .env file, paste assignments, or add fields. Later entries override earlier ones: file, paste, then fields. Lines starting with # are comments. For values beginning with #, use COLOR=#ffffff. Values are literal; HOST and PORT are managed automatically.</p>
+      <label>Upload .env<input type="file" name="env_file" /></label>
+      <label>Paste KEY=value assignments<textarea name="environment" rows="5" spellcheck="false" placeholder="API_KEY=your-key"></textarea></label>
+      <div data-env-fields><div class="split"><label>Variable name<input name="env_key" placeholder="API_KEY" pattern="[A-Za-z_][A-Za-z0-9_]*" /></label><label>Value<input name="env_value" type="password" autocomplete="new-password" /></label></div></div>
+      <button type="button" data-add-env>Add variable</button>
+    </fieldset>

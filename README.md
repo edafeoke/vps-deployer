@@ -145,3 +145,9 @@ accepts an `environment` string. Values are literal (no shell expansion), single
 and limited to 64 KiB per submission. `HOST` and `PORT` are managed by the platform.
 Variables are stored in the local database and supplied to builds and application
 processes; systemd receives a mode-0600 environment file at deployment time.
+
+The panel loads repository and branch dropdowns from the connected GitHub App,
+selecting each repository's default branch. Existing projects have an Environment
+variables editor for adding, replacing, or removing values. Omitted values remain
+unchanged. Lines starting with `#` are ignored; values such as `COLOR=#ffffff` are
+preserved. Redeploy after saving to apply changes to builds and application startup.

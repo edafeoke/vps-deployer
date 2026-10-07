@@ -426,12 +426,17 @@ def create_installation_token(settings: Settings | None = None) -> str:
 
 def list_accessible_repositories(settings: Settings | None = None) -> list[dict[str, str]]:
     token = create_installation_token(settings)
-    payload = call_github("GET", "/installation/repositories", token)
-    if not isinstance(payload, dict):
-        raise GitHubAuthError("Unexpected repository list from GitHub")
-    repositories = payload.get("repositories", [])
-    if not isinstance(repositories, list):
-        raise GitHubAuthError("Unexpected repository list from GitHub")
+    repositories = []
+    page = 1
+    while True:
+        payload = call_github("GET", f"/installation/repositories?per_page=100&page={page}", token)
+        if not isinstance(payload, dict) or not isinstance(payload.get("repositories"), list):
+            raise GitHubAuthError("Unexpected repository list from GitHub")
+        batch = payload["repositories"]
+        repositories.extend(batch)
+        if len(batch) < 100:
+            break
+        page += 1
     result: list[dict[str, str]] = []
     for item in repositories:
         if not isinstance(item, dict):
@@ -446,6 +451,28 @@ def list_accessible_repositories(settings: Settings | None = None) -> list[dict[
                 }
             )
     return result
+
+
+def list_repository_branches(repository: str, settings: Settings | None = None) -> list[str]:
+    from vps_deployer.core.validation import validate_repository
+
+    repository = validate_repository(repository)
+    token = create_installation_token(settings)
+    branches: list[str] = []
+    page = 1
+    while True:
+        payload = call_github(
+            "GET", f"/repos/{repository}/branches?per_page=100&page={page}", token
+        )
+        if not isinstance(payload, list):
+            raise GitHubAuthError("Unexpected branch list from GitHub")
+        for item in payload:
+            if not isinstance(item, dict) or not isinstance(item.get("name"), str):
+                raise GitHubAuthError("Unexpected branch list from GitHub")
+            branches.append(item["name"])
+        if len(payload) < 100:
+            return branches
+        page += 1
 
 
 def github_status(settings: Settings | None = None, probe: bool = True) -> dict[str, Any]:

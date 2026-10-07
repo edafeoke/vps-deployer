@@ -488,3 +488,19 @@ pre.log {
     font-size: 1.85rem;
   }
 }
+
+.environment-inputs {
+  display: grid;
+  gap: 0.85rem;
+  min-width: 0;
+  margin: 1rem 0;
+  padding: 1rem;
+  border: 1px solid var(--line);
+}
+.environment-inputs legend { padding: 0 0.4rem; }
+.environment-inputs p { margin: 0; }
+.environment-inputs label { min-width: 0; }
+.environment-inputs button { justify-self: start; }
+.environment-inputs [data-env-fields] { display: grid; gap: 0.85rem; }
+.environment-keys label { display: flex; align-items: center; gap: 0.6rem; }
+.environment-keys input[type="checkbox"] { flex: none; width: auto; margin: 0; }

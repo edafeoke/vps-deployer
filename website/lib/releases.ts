@@ -7,6 +7,13 @@ export type Release = {
 
 export const releases: Release[] = [
   {
+    version: "0.8.1",
+    date: "2026-10-05",
+    title: "Repository selectors and environment editing",
+    summary:
+      "Choose repositories and branches from GitHub dropdowns, preserve hash-prefixed environment values, and add, update, or remove variables on existing projects.",
+  },
+  {
     version: "0.8.0",
     date: "2026-10-05",
     title: "Runtime detection and environment inputs",

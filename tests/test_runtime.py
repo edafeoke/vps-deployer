@@ -148,9 +148,19 @@ def test_systemd_install_sends_unit_to_helper(monkeypatch) -> None:
     monkeypatch.setattr(
         "vps_deployer.core.runtime.persist_start_command", lambda *_args, **_kwargs: None
     )
+    monkeypatch.setattr(
+        "vps_deployer.core.environment.project_environment", lambda *_: {"COLOR": "#ffffff"}
+    )
+    monkeypatch.setattr(
+        "vps_deployer.core.environment.write_environment",
+        lambda root, values: captured.update(environment_root=root, environment=values),
+    )
     SystemdRuntimeProvider().install(
         project, Path("/var/www/apps/my-api/current"), ["npm", "start"]
     )
+    assert captured["environment_root"] == Path("/var/www/apps/my-api")
+    assert captured["environment"] == {"COLOR": "#ffffff"}
+
     assert captured["args"] == ("app-unit-install", "my-api")
     text = str(captured["stdin"])
     assert "User=vps-deployer" in text

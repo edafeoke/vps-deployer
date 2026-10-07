@@ -254,6 +254,11 @@ class SystemdRuntimeProvider:
                     "systemd runtime requires application files under /var/www/apps/"
                 ) from exc
             raise AppRuntimeError(str(exc)) from exc
+        from vps_deployer.core.environment import project_environment, write_environment
+
+        write_environment(
+            Path(project.deployment_path), project_environment(project, self._settings())
+        )
         unit = render_app_unit(
             project=project.name,
             port=project.port,

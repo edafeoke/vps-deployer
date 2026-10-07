@@ -42,6 +42,7 @@ from vps_deployer.core.github import (
     github_status,
     handle_github_webhook,
     list_accessible_repositories,
+    list_repository_branches,
 )
 from vps_deployer.core.nginx import NginxError, apply_project_nginx, nginx_status, save_nginx_config
 from vps_deployer.core.projects import (
@@ -210,6 +211,22 @@ def api_create_project(body: ProjectCreateBody) -> dict[str, object]:
     except (ValidationError, ProjectConflictError) as exc:
         raise _project_error(exc) from exc
     return project_payload(project)
+
+
+class EnvironmentUpdateBody(BaseModel):
+    environment: str = ""
+    remove: list[str] = Field(default_factory=list)
+
+
+@app.patch("/api/projects/{project}/environment")
+def api_update_environment(project: str, body: EnvironmentUpdateBody) -> dict[str, object]:
+    from vps_deployer.core.environment import update_environment
+
+    try:
+        keys = update_environment(project, body.environment, body.remove, get_settings())
+    except (ValidationError, ProjectNotFoundError) as exc:
+        raise _project_error(exc) from exc
+    return {"keys": keys, "detail": "Saved. Redeploy to apply all changes."}
 
 
 @app.get("/api/projects/{project}")
@@ -489,6 +506,18 @@ def api_github_repos() -> dict[str, object]:
     except GitHubAuthError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return {"repositories": repositories}
+
+
+@app.get("/api/github/branches")
+def api_github_branches(repository: str) -> dict[str, object]:
+    try:
+        return {"branches": list_repository_branches(repository, get_settings())}
+    except ValidationError as exc:
+        raise _project_error(exc) from exc
+    except GitHubNotConfiguredError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except GitHubAuthError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
 @app.post("/api/github/webhook")

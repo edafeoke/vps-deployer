@@ -32,6 +32,7 @@ NOTICES = {
     "nginx_saved": "Nginx config saved. Custom edits persist across deployments.",
     "nginx_reset": "Generated Nginx config restored.",
     "created": "Project created on this VPS.",
+    "environment_saved": "Environment saved. Redeploy to apply all changes.",
     "deployed": "Deployment queued on this VPS.",
     "rolled_back": "Rollback finished on this VPS.",
     "started": "Application start requested.",
@@ -141,6 +142,8 @@ def project_context(
     error: str | None = None,
 ) -> dict[str, Any]:
     current = settings or get_settings()
+    from vps_deployer.core.environment import project_environment
+
     project = get_project(name, current)
     deployments = [deployment_payload(row) for row in list_deployments(project.name, current)]
     domains = [domain_payload(row) for row in list_domains(project.name, current)]
@@ -151,6 +154,7 @@ def project_context(
             "page": "project",
             "title": project.name,
             "project": project_payload(project),
+            "environment_keys": sorted(project_environment(project, current)),
             "deployments": deployments,
             "domains": domains,
             "ssl": ssl_status(project.name, current),
